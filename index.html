@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Kikkert Kamera</title>
+<style>
+  :root{
+    --bg:#0a0e12;
+    --glass:rgba(255,255,255,.07);
+    --glass-line:rgba(255,255,255,.14);
+    --amber:#ffb454;
+    --teal:#46d3c8;
+    --text:#f2f5f7;
+    --muted:#8a97a3;
+    --red:#ff5a5f;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    user-select:none;-webkit-user-select:none}
+  #stage{position:fixed;inset:0;background:#000;overflow:hidden}
+  video{position:absolute;top:50%;left:50%;width:100%;height:100%;
+    object-fit:cover;transform:translate(-50%,-50%);transform-origin:center}
+  /* optisk reticle-overlay – appens signatur */
+  #reticle{position:absolute;inset:0;pointer-events:none;opacity:.5;
+    transition:opacity .3s}
+  #reticle.hide{opacity:0}
+  .ret-line{position:absolute;background:rgba(255,180,84,.55)}
+  .ret-h{left:50%;top:50%;width:26px;height:2px;transform:translate(-50%,-50%)}
+  .ret-v{left:50%;top:50%;width:2px;height:26px;transform:translate(-50%,-50%)}
+  .corner{position:absolute;width:34px;height:34px;border:2px solid rgba(255,255,255,.35)}
+  .c-tl{top:16%;left:12%;border-right:none;border-bottom:none}
+  .c-tr{top:16%;right:12%;border-left:none;border-bottom:none}
+  .c-bl{bottom:22%;left:12%;border-right:none;border-top:none}
+  .c-br{bottom:22%;right:12%;border-left:none;border-top:none}
+
+  /* top: zoom-aflæsning */
+  #topbar{position:absolute;top:0;left:0;right:0;padding:calc(env(safe-area-inset-top) + 14px) 16px 10px;
+    display:flex;justify-content:center;align-items:flex-start;gap:10px}
+  #zoomRead{font-variant-numeric:tabular-nums;font-weight:700;font-size:30px;
+    letter-spacing:.5px;color:var(--amber);text-shadow:0 0 18px rgba(255,180,84,.45);
+    line-height:1}
+  #zoomRead small{font-size:15px;opacity:.75;font-weight:600}
+  #digTag{align-self:center;font-size:11px;font-weight:700;letter-spacing:1px;
+    text-transform:uppercase;color:#0a0e12;background:var(--teal);
+    padding:3px 8px;border-radius:100px;opacity:0;transition:opacity .2s}
+  #digTag.on{opacity:1}
+
+  /* vertikal zoom-skinne */
+  #rail{position:absolute;right:14px;top:50%;transform:translateY(-50%);
+    height:56%;width:52px;display:flex;flex-direction:column;align-items:center;
+    justify-content:space-between;gap:8px;touch-action:none}
+  #track{position:relative;flex:1;width:44px;border-radius:26px;
+    background:var(--glass);border:1px solid var(--glass-line);
+    backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);overflow:hidden}
+  #fill{position:absolute;left:0;right:0;bottom:0;
+    background:linear-gradient(to top,rgba(255,180,84,.35),rgba(255,180,84,.08))}
+  #knob{position:absolute;left:50%;transform:translate(-50%,50%);
+    width:40px;height:40px;border-radius:50%;
+    background:var(--amber);border:3px solid #1a1f26;
+    box-shadow:0 0 16px rgba(255,180,84,.6);display:flex;align-items:center;
+    justify-content:center;font-size:11px;font-weight:800;color:#1a1f26}
+  .rail-cap{font-size:11px;font-weight:700;color:var(--muted);width:100%;text-align:center}
+
+  /* zoom-presets */
+  #presets{position:absolute;bottom:calc(env(safe-area-inset-bottom) + 132px);
+    left:0;right:0;display:flex;justify-content:center;gap:8px;padding:0 12px}
+  .preset{background:var(--glass);border:1px solid var(--glass-line);
+    color:var(--text);font-weight:700;font-size:13px;
+    padding:8px 12px;border-radius:100px;min-width:46px;backdrop-filter:blur(8px)}
+  .preset.active{background:var(--amber);color:#1a1f26;border-color:var(--amber)}
+
+  /* bund-kontroller */
+  #controls{position:absolute;bottom:calc(env(safe-area-inset-bottom) + 26px);
+    left:0;right:0;display:flex;align-items:center;justify-content:center;gap:44px}
+  .round{width:52px;height:52px;border-radius:50%;background:var(--glass);
+    border:1px solid var(--glass-line);display:flex;align-items:center;
+    justify-content:center;backdrop-filter:blur(8px)}
+  .round svg{width:24px;height:24px;stroke:var(--text);fill:none;stroke-width:2;
+    stroke-linecap:round;stroke-linejoin:round}
+  .round.on{background:var(--amber);border-color:var(--amber)}
+  .round.on svg{stroke:#1a1f26}
+  #shutter{width:76px;height:76px;border-radius:50%;background:transparent;
+    border:4px solid #fff;display:flex;align-items:center;justify-content:center;
+    padding:0}
+  #shutterInner{width:60px;height:60px;border-radius:50%;background:#fff;
+    transition:transform .1s}
+  #shutter:active #shutterInner{transform:scale(.86)}
+
+  /* flash ved foto */
+  #flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
+  #flash.pop{animation:pop .28s ease}
+  @keyframes pop{0%{opacity:.85}100%{opacity:0}}
+
+  /* seneste foto-thumbnail */
+  #thumb{position:absolute;bottom:calc(env(safe-area-inset-bottom) + 26px);left:22px;
+    width:52px;height:52px;border-radius:12px;border:2px solid rgba(255,255,255,.6);
+    object-fit:cover;display:none;background:#000}
+
+  /* start / fejl-overlay */
+  #overlay{position:absolute;inset:0;background:rgba(6,9,12,.94);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;padding:32px;gap:18px;z-index:5}
+  #overlay h1{font-size:26px;font-weight:800;letter-spacing:.3px}
+  #overlay h1 span{color:var(--amber)}
+  #overlay p{color:var(--muted);font-size:15px;max-width:320px;line-height:1.5}
+  #startBtn{margin-top:6px;background:var(--amber);color:#1a1f26;border:none;
+    font-weight:800;font-size:17px;padding:15px 34px;border-radius:100px;
+    box-shadow:0 0 24px rgba(255,180,84,.45)}
+  .badge{display:flex;align-items:center;gap:9px;color:var(--teal);
+    font-weight:700;font-size:13px;letter-spacing:1px;text-transform:uppercase}
+  .hidden{display:none!important}
+  @media (prefers-reduced-motion:reduce){#flash.pop{animation:none}}
+</style>
+</head>
+<body>
+<div id="stage">
+  <video id="video" playsinline autoplay muted></video>
+
+  <div id="reticle">
+    <div class="ret-line ret-h"></div>
+    <div class="ret-line ret-v"></div>
+    <div class="corner c-tl"></div><div class="corner c-tr"></div>
+    <div class="corner c-bl"></div><div class="corner c-br"></div>
+  </div>
+
+  <div id="flash"></div>
+
+  <div id="topbar">
+    <div id="zoomRead">1.0<small>x</small></div>
+    <div id="digTag">Digital</div>
+  </div>
+
+  <div id="rail">
+    <div class="rail-cap" id="maxCap">–</div>
+    <div id="track">
+      <div id="fill"></div>
+      <div id="knob">1x</div>
+    </div>
+    <div class="rail-cap">1x</div>
+  </div>
+
+  <div id="presets"></div>
+
+  <img id="thumb" alt="Seneste foto">
+
+  <div id="controls">
+    <button class="round" id="torchBtn" title="Lygte" aria-label="Lygte">
+      <svg viewBox="0 0 24 24"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg>
+    </button>
+    <button id="shutter" aria-label="Tag foto"><div id="shutterInner"></div></button>
+    <button class="round" id="flipBtn" title="Skift kamera" aria-label="Skift kamera">
+      <svg viewBox="0 0 24 24"><path d="M21 8a9 9 0 0 0-15-3L3 8"/><path d="M3 3v5h5"/><path d="M3 16a9 9 0 0 0 15 3l3-3"/><path d="M21 21v-5h-5"/></svg>
+    </button>
+  </div>
+
+  <div id="overlay">
+    <div class="badge">◉ Optisk instrument</div>
+    <h1>Kikkert <span>Kamera</span></h1>
+    <p>Zoom helt ind. Bruger optisk zoom hvor din linse kan – og digital zoom derudover.</p>
+    <button id="startBtn">Start kamera</button>
+    <p id="errMsg" style="color:var(--red);font-weight:600;display:none"></p>
+  </div>
+</div>
+
+<script>
+(function(){
+  const video   = document.getElementById('video');
+  const zoomRead= document.getElementById('zoomRead');
+  const digTag  = document.getElementById('digTag');
+  const rail    = document.getElementById('rail');
+  const track   = document.getElementById('track');
+  const fill    = document.getElementById('fill');
+  const knob    = document.getElementById('knob');
+  const maxCap  = document.getElementById('maxCap');
+  const presets = document.getElementById('presets');
+  const overlay = document.getElementById('overlay');
+  const startBtn= document.getElementById('startBtn');
+  const errMsg  = document.getElementById('errMsg');
+  const shutter = document.getElementById('shutter');
+  const flipBtn = document.getElementById('flipBtn');
+  const torchBtn= document.getElementById('torchBtn');
+  const thumb   = document.getElementById('thumb');
+  const flash   = document.getElementById('flash');
+  const reticle = document.getElementById('reticle');
+
+  let stream=null, trackObj=null, caps=null;
+  let facing='environment';
+  let nativeMin=1, nativeMax=1, nativeStep=0, hasNativeZoom=false;
+  let digitalMaxMult=6;                 // ekstra digital zoom oven på optisk
+  let totalMax=1, totalMin=1;
+  let current=1;                        // samlet zoom (optisk*digital)
+  let torchOn=false, hasTorch=false;
+
+  function err(msg){ errMsg.style.display='block'; errMsg.innerHTML=msg; }
+
+  function insecure(){
+    // Kamera kræver https:// eller localhost. file:// og content:// blokeres.
+    return !window.isSecureContext ||
+           location.protocol==='content:' || location.protocol==='file:';
+  }
+
+  async function start(){
+    errMsg.style.display='none';
+    if(insecure()){
+      err('Denne side er åbnet som en <b>lokal fil</b> ('+location.protocol+
+          '), og browseren tillader ikke kamera her.<br><br>'+
+          'Læg filen på en <b>https-adresse</b> (fx GitHub Pages) og åbn den derfra – '+
+          'så virker kameraet.');
+      return;
+    }
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      err('Din browser understøtter ikke kamera-adgang. Prøv Chrome eller Safari.');
+      return;
+    }
+    try{
+      if(stream){ stream.getTracks().forEach(t=>t.stop()); }
+      stream = await navigator.mediaDevices.getUserMedia({
+        video:{ facingMode:{ideal:facing}, width:{ideal:3840}, height:{ideal:2160} },
+        audio:false
+      });
+      video.srcObject = stream;
+      trackObj = stream.getVideoTracks()[0];
+      caps = trackObj.getCapabilities ? trackObj.getCapabilities() : {};
+      setupZoom();
+      setupTorch();
+      overlay.classList.add('hidden');
+    }catch(e){
+      if(e && e.name==='NotAllowedError') err('Kamera-adgang blev afvist. Tryk "Tillad" når browseren spørger – eller giv siden kamera-adgang i browserens sideindstillinger (tryk på 🔒/ⓘ ved adressen).');
+      else if(e && e.name==='NotFoundError') err('Fandt intet kamera på enheden.');
+      else err('Kunne ikke starte kameraet: '+(e && e.message ? e.message : e));
+    }
+  }
+
+  function setupZoom(){
+    hasNativeZoom = !!(caps && caps.zoom);
+    if(hasNativeZoom){
+      nativeMin = caps.zoom.min || 1;
+      nativeMax = caps.zoom.max || 1;
+      nativeStep= caps.zoom.step || .1;
+    }else{ nativeMin=1; nativeMax=1; }
+    totalMin = 1;
+    totalMax = Math.max(nativeMax,1) * digitalMaxMult;
+    current  = 1;
+    maxCap.textContent = Math.round(totalMax)+'x';
+    buildPresets();
+    applyZoom(1);
+  }
+
+  function buildPresets(){
+    presets.innerHTML='';
+    let vals=[1];
+    if(nativeMax>=2) vals.push(2);
+    if(nativeMax>=3) vals.push(Math.round(nativeMax));      // maks optisk
+    // et par digitale spring
+    let d = Math.round(totalMax);
+    [Math.round(totalMax/2), d].forEach(v=>{ if(v>vals[vals.length-1]) vals.push(v); });
+    vals = [...new Set(vals)].filter(v=>v>=1 && v<=totalMax).slice(0,5);
+    vals.forEach(v=>{
+      const b=document.createElement('button');
+      b.className='preset'; b.dataset.v=v;
+      b.textContent = (v>=10? Math.round(v) : (v%1?v.toFixed(1):v))+'x';
+      b.addEventListener('click',()=>applyZoom(v));
+      presets.appendChild(b);
+    });
+  }
+
+  function applyZoom(total){
+    total = Math.min(Math.max(total,totalMin),totalMax);
+    current = total;
+
+    // del op: optisk først, digital derefter
+    let nativeVal = Math.min(total, nativeMax);
+    let digital   = total / nativeVal;   // >=1
+
+    if(hasNativeZoom){
+      trackObj.applyConstraints({advanced:[{zoom:nativeVal}]}).catch(()=>{});
+    }
+    video.style.transform = 'translate(-50%,-50%) scale('+digital.toFixed(3)+')';
+
+    // UI
+    const isDigital = digital > 1.001;
+    digTag.classList.toggle('on', isDigital);
+    reticle.classList.toggle('hide', total<1.05);
+    const shown = total>=10 ? total.toFixed(0) : total.toFixed(1);
+    zoomRead.innerHTML = shown+'<small>x</small>';
+    knob.textContent = (total>=10?total.toFixed(0):total.toFixed(1))+'x';
+
+    // skinne-position (log-skala for finere kontrol i lav zoom)
+    const t = Math.log(total/totalMin) / Math.log(totalMax/totalMin);
+    const h = track.clientHeight;
+    knob.style.bottom = (t*(h-40)+2) + 'px';
+    knob.style.top='auto';
+    fill.style.height = (t*100)+'%';
+
+    // marker preset
+    document.querySelectorAll('.preset').forEach(p=>{
+      p.classList.toggle('active', Math.abs(parseFloat(p.dataset.v)-total)<.05);
+    });
+  }
+
+  // træk på skinnen
+  let dragging=false;
+  function railToZoom(clientY){
+    const r = track.getBoundingClientRect();
+    let t = 1 - (clientY - r.top)/r.height;
+    t = Math.min(Math.max(t,0),1);
+    const z = totalMin * Math.pow(totalMax/totalMin, t);
+    applyZoom(z);
+  }
+  function down(e){ dragging=true; move(e); }
+  function move(e){ if(!dragging)return; e.preventDefault();
+    const y = e.touches? e.touches[0].clientY : e.clientY; railToZoom(y); }
+  function up(){ dragging=false; }
+  rail.addEventListener('touchstart',down,{passive:false});
+  rail.addEventListener('touchmove',move,{passive:false});
+  rail.addEventListener('touchend',up);
+  rail.addEventListener('mousedown',down);
+  window.addEventListener('mousemove',move);
+  window.addEventListener('mouseup',up);
+
+  // knib-zoom (pinch)
+  let pinchStart=0, pinchZoom=1;
+  video.parentElement.addEventListener('touchstart',e=>{
+    if(e.touches.length===2){
+      pinchStart=dist(e.touches); pinchZoom=current;
+    }
+  },{passive:false});
+  video.parentElement.addEventListener('touchmove',e=>{
+    if(e.touches.length===2){
+      e.preventDefault();
+      const ratio = dist(e.touches)/pinchStart;
+      applyZoom(pinchZoom*ratio);
+    }
+  },{passive:false});
+  function dist(t){const dx=t[0].clientX-t[1].clientX,dy=t[0].clientY-t[1].clientY;return Math.hypot(dx,dy);}
+
+  // lygte
+  function setupTorch(){
+    hasTorch = !!(caps && caps.torch);
+    torchBtn.style.opacity = hasTorch? '1':'.35';
+    torchOn=false; torchBtn.classList.remove('on');
+  }
+  torchBtn.addEventListener('click',()=>{
+    if(!hasTorch)return;
+    torchOn=!torchOn;
+    trackObj.applyConstraints({advanced:[{torch:torchOn}]}).catch(()=>{});
+    torchBtn.classList.toggle('on',torchOn);
+  });
+
+  // skift kamera
+  flipBtn.addEventListener('click',()=>{
+    facing = facing==='environment'?'user':'environment';
+    start();
+  });
+
+  // tag foto – bevarer optisk + digital zoom via canvas-crop
+  shutter.addEventListener('click',()=>{
+    if(!video.videoWidth)return;
+    const vw=video.videoWidth, vh=video.videoHeight;
+    const digital = current / Math.min(current,nativeMax);
+    const sw=vw/digital, sh=vh/digital;
+    const sx=(vw-sw)/2, sy=(vh-sh)/2;
+    const cv=document.createElement('canvas');
+    cv.width=Math.round(sw); cv.height=Math.round(sh);
+    const ctx=cv.getContext('2d');
+    if(facing==='user'){ ctx.translate(cv.width,0); ctx.scale(-1,1); }
+    ctx.drawImage(video, sx,sy,sw,sh, 0,0,cv.width,cv.height);
+    cv.toBlob(blob=>{
+      const url=URL.createObjectURL(blob);
+      thumb.src=url; thumb.style.display='block';
+      const a=document.createElement('a');
+      a.href=url; a.download='foto-'+Date.now()+'.jpg'; a.click();
+    },'image/jpeg',.95);
+    flash.classList.remove('pop'); void flash.offsetWidth; flash.classList.add('pop');
+  });
+
+  thumb.addEventListener('click',()=>{ if(thumb.src) window.open(thumb.src,'_blank'); });
+  startBtn.addEventListener('click',start);
+  window.addEventListener('resize',()=>applyZoom(current));
+})();
+</script>
+</body>
+</html>
