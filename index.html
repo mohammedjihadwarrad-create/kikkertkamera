@@ -363,6 +363,7 @@
 </div></div>
 
 <input id="editInput" type="file" accept="image/*" class="hidden">
+<input id="docInput" type="file" accept="image/*" capture="environment" class="hidden">
 
 <nav id="tabs">
   <button class="tab active" data-screen="homeScreen"><svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>Hjem</button>
@@ -375,7 +376,7 @@
 <div id="viewer">
   <div id="viewBar">
     <button id="vBack">&#8249; Tilbage</button>
-    <div class="grp"><button id="vFav">&#9825;</button><button id="vTrash">Slet</button></div>
+    <div class="grp"><button id="vFav">&#9825;</button><button id="vLink">Link</button><button id="vTrash">Slet</button></div>
   </div>
   <div id="viewImgWrap"><img id="viewImg" alt="Foto"><video id="viewVid" controls playsinline class="hidden"></video></div>
   <div id="viewMeta"></div>
@@ -413,7 +414,7 @@
     var id=Date.now()+'-'+Math.random().toString(36).slice(2,7);
     var rec={id:id,blob:blob,kind:kind||'photo',created:Date.now(),
       taken:(meta.taken||Date.now()),lat:(meta.lat!=null?meta.lat:null),lng:(meta.lng!=null?meta.lng:null),
-      fav:false,album:null,deleted:false,deletedAt:null};
+      fav:false,album:(meta.album||null),deleted:false,deletedAt:null};
     var tx=db.transaction(STORE,'readwrite');tx.objectStore(STORE).put(rec);
     tx.oncomplete=function(){res(id);};tx.onerror=function(e){rej(e);};
   });}
@@ -590,6 +591,14 @@
     });});
   function readBuf(f){return new Promise(function(res,rej){var r=new FileReader();r.onload=function(){res(r.result);};r.onerror=rej;r.readAsArrayBuffer(f);});}
 
+  /* Dokument-scan: telefon-kamera + forbedring */
+  $('docInput').addEventListener('change',function(e){var f=e.target.files[0];if(f)enhanceDoc(f);e.target.value='';});
+  function enhanceDoc(file){var url=URL.createObjectURL(file);var img=new Image();
+    img.onload=function(){var cv=document.createElement('canvas');cv.width=img.naturalWidth;cv.height=img.naturalHeight;var ctx=cv.getContext('2d');
+      ctx.filter='grayscale(1) contrast(1.65) brightness(1.12)';ctx.drawImage(img,0,0);URL.revokeObjectURL(url);
+      cv.toBlob(function(blob){saveItem(blob,'photo',{taken:Date.now(),album:'Dokumenter'}).then(function(){switchTo('galScreen');});},'image/jpeg',.92);};
+    img.onerror=function(){URL.revokeObjectURL(url);alert('Kunne ikke læse billedet.');};img.src=url;}
+
   /* ---------- Galleri hub ---------- */
   var items=[],itemUrls={},currentMod='alle',selectedAlbum=null,selMode=false,selected={};
   var MODULES=[['alle','Alle'],['steder','Steder'],['kalender','Kalender'],['album','Album'],['favoritter','Favoritter'],['video','Video'],['papirkurv','Papirkurv']];
@@ -695,6 +704,18 @@
   $('vDownload').addEventListener('click',function(){if(cur)downloadItem(cur);});
   $('vShare').addEventListener('click',function(){if(cur)shareItems([cur]);});
   $('vAlbum').addEventListener('click',function(){if(!cur)return;var ex=distinctAlbums();var name=prompt('Læg i album — skriv navn:'+(ex.length?'\nEksisterende: '+ex.join(', '):''),cur.album||'');if(name&&name.trim()){cur.album=name.trim();updateRec(cur).then(function(){viewMeta.textContent=fmtMeta(cur);refreshGallery();});}});
+  $('vLink').addEventListener('click',function(){if(cur)cloudShare(cur);});
+  function copyLink(link){if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(link).then(function(){alert('Link kopieret (gyldigt i 7 dage):\n'+link);},function(){prompt('Kopiér linket:',link);});}else prompt('Kopiér linket:',link);}
+  function cloudShare(it){
+    if(!sb){alert('Sky ikke tilgængelig — tjek internettet.');return;}
+    if(!authUser){alert('Log ind på Profil-fanen for at dele via link.');closeViewer();switchTo('profScreen');return;}
+    var ext=it.kind==='video'?'webm':'jpg',path=authUser.id+'/'+it.id+'.'+ext;
+    sb.storage.from('media').upload(path,it.blob,{upsert:true,contentType:it.blob.type||'image/jpeg'})
+      .then(function(){return sb.storage.from('media').createSignedUrl(path,604800);})
+      .then(function(r){if(r.error||!r.data){alert('Kunne ikke lave link: '+((r.error&&r.error.message)||''));return;}
+        var link=r.data.signedUrl;if(navigator.share){navigator.share({title:'MyEye',url:link}).catch(function(){copyLink(link);});}else copyLink(link);})
+      .catch(function(e){alert('Fejl: '+(e.message||e));});
+  }
 
   /* ---------- Tema ---------- */
   var SW=['#ffb454','#46d3c8','#ff5a8a','#8a7dff','#5ad17e','#f2f5f7','#ff8f3f'],themeSheet=$('themeSheet');
@@ -783,8 +804,9 @@
   $('createSheet').addEventListener('click',function(e){if(e.target===$('createSheet'))$('createSheet').classList.remove('on');});
   [].slice.call(document.querySelectorAll('.crow')).forEach(function(b){b.addEventListener('click',function(){
     var a=b.dataset.act;$('createSheet').classList.remove('on');
-    if(a==='foto'||a==='doc')switchTo('camScreen');
-    else if(a==='video'){switchTo('camScreen');setTimeout(function(){},0);}
+    if(a==='foto')switchTo('camScreen');
+    else if(a==='video')switchTo('camScreen');
+    else if(a==='doc')$('docInput').click();
     else if(a==='upload')fileInput.click();
     else if(a==='album')goModule('album');
     else if(a==='collage')goShare();
