@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Kikkert Kamera</title>
+<meta name="theme-color" content="#0a0e12">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Kikkert">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  :root{--bg:#0a0e12;--glass:rgba(255,255,255,.07);--glass-line:rgba(255,255,255,.14);
+    --amber:#ffb454;--teal:#46d3c8;--text:#f2f5f7;--muted:#8a97a3;--red:#ff5a5f;}
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;user-select:none;-webkit-user-select:none}
+  .screen{position:fixed;inset:0;display:none}
+  .screen.active{display:block}
+  button{font-family:inherit;cursor:pointer}
+
+  /* KAMERA */
+  #stage{position:absolute;inset:0;bottom:74px;background:#000;overflow:hidden}
+  video{position:absolute;top:50%;left:50%;width:100%;height:100%;object-fit:cover;transform:translate(-50%,-50%);transform-origin:center}
+  video.mirror{transform:translate(-50%,-50%) scaleX(-1)}
+  #reticle{position:absolute;inset:0;pointer-events:none;opacity:.5;transition:opacity .3s}
+  #reticle.hide{opacity:0}
+  .ret-line{position:absolute;background:rgba(255,180,84,.55)}
+  .ret-h{left:50%;top:50%;width:26px;height:2px;transform:translate(-50%,-50%)}
+  .ret-v{left:50%;top:50%;width:2px;height:26px;transform:translate(-50%,-50%)}
+  .corner{position:absolute;width:34px;height:34px;border:2px solid rgba(255,255,255,.35)}
+  .c-tl{top:14%;left:12%;border-right:none;border-bottom:none}
+  .c-tr{top:14%;right:12%;border-left:none;border-bottom:none}
+  .c-bl{bottom:16%;left:12%;border-right:none;border-top:none}
+  .c-br{bottom:16%;right:12%;border-left:none;border-top:none}
+  #grid3{position:absolute;inset:0;pointer-events:none;display:none}
+  #grid3.on{display:block}
+  #grid3 span{position:absolute;background:rgba(255,255,255,.22)}
+  #grid3 .gv1{left:33.33%;top:0;bottom:0;width:1px}
+  #grid3 .gv2{left:66.66%;top:0;bottom:0;width:1px}
+  #grid3 .gh1{top:33.33%;left:0;right:0;height:1px}
+  #grid3 .gh2{top:66.66%;left:0;right:0;height:1px}
+  #topbar{position:absolute;top:0;left:0;right:0;padding:calc(env(safe-area-inset-top) + 12px) 14px 10px;
+    display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+  #topLeft,#topRight{display:flex;gap:8px;align-items:center}
+  .chip{background:var(--glass);border:1px solid var(--glass-line);color:var(--text);font-weight:700;font-size:12px;
+    padding:8px 10px;border-radius:100px;display:flex;align-items:center;gap:5px;min-height:34px}
+  .chip.on{background:var(--amber);color:#1a1f26;border-color:var(--amber)}
+  .chip svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  #zoomWrap{position:absolute;top:calc(env(safe-area-inset-top) + 54px);left:0;right:0;display:flex;justify-content:center;pointer-events:none}
+  #zoomRead{font-variant-numeric:tabular-nums;font-weight:700;font-size:26px;color:var(--amber);text-shadow:0 0 18px rgba(255,180,84,.45);line-height:1}
+  #zoomRead small{font-size:13px;opacity:.75;font-weight:600}
+  #digTag{margin-left:8px;align-self:center;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;
+    color:#0a0e12;background:var(--teal);padding:3px 8px;border-radius:100px;opacity:0;transition:opacity .2s;pointer-events:none}
+  #digTag.on{opacity:1}
+  #rail{position:absolute;right:12px;top:46%;transform:translateY(-50%);height:46%;width:50px;display:flex;
+    flex-direction:column;align-items:center;justify-content:space-between;gap:6px;touch-action:none}
+  .rail-cap{font-size:10px;font-weight:700;color:var(--muted);text-align:center}
+  #track{position:relative;flex:1;width:42px;border-radius:24px;background:var(--glass);border:1px solid var(--glass-line);overflow:hidden}
+  #fill{position:absolute;left:0;right:0;bottom:0;background:linear-gradient(to top,rgba(255,180,84,.35),rgba(255,180,84,.08))}
+  #knob{position:absolute;left:50%;transform:translate(-50%,50%);width:38px;height:38px;border-radius:50%;background:var(--amber);
+    border:3px solid #1a1f26;box-shadow:0 0 16px rgba(255,180,84,.6);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#1a1f26}
+  #filterStrip{position:absolute;left:0;right:0;bottom:150px;z-index:4;display:flex;gap:8px;overflow-x:auto;padding:0 12px 4px;scrollbar-width:none}
+  #filterStrip::-webkit-scrollbar{display:none}
+  .fchip{flex:0 0 auto;background:var(--glass);border:1px solid var(--glass-line);color:var(--text);font-weight:700;font-size:12px;padding:7px 12px;border-radius:100px}
+  .fchip.active{background:var(--amber);color:#1a1f26;border-color:var(--amber)}
+  #presets{position:absolute;bottom:104px;left:0;right:0;z-index:4;display:flex;justify-content:center;gap:8px;padding:0 12px}
+  .preset{background:var(--glass);border:1px solid var(--glass-line);color:var(--text);font-weight:700;font-size:12px;padding:6px 10px;border-radius:100px;min-width:40px}
+  .preset.active{background:var(--amber);color:#1a1f26;border-color:var(--amber)}
+  #camControls{position:absolute;left:0;right:0;bottom:74px;padding-bottom:14px;padding-top:8px;display:flex;align-items:center;
+    justify-content:center;gap:34px;background:linear-gradient(to top,rgba(0,0,0,.55),transparent)}
+  .round{width:50px;height:50px;border-radius:50%;background:var(--glass);border:1px solid var(--glass-line);display:flex;align-items:center;justify-content:center}
+  .round svg{width:22px;height:22px;stroke:var(--text);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .round.on{background:var(--amber);border-color:var(--amber)}
+  .round.on svg{stroke:#1a1f26}
+  #shutter{width:74px;height:74px;border-radius:50%;background:transparent;border:4px solid #fff;display:flex;align-items:center;justify-content:center;padding:0;position:relative}
+  #shutterInner{width:58px;height:58px;border-radius:50%;background:#fff;transition:all .15s}
+  #shutter.rec #shutterInner{width:30px;height:30px;border-radius:8px;background:var(--red)}
+  #shutter:active #shutterInner{transform:scale(.9)}
+  #recTime{position:absolute;top:-30px;left:50%;transform:translateX(-50%);background:var(--red);color:#fff;font-weight:800;font-size:12px;padding:3px 9px;border-radius:100px;display:none;white-space:nowrap}
+  #recTime.on{display:block}
+  #flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
+  #flash.pop{animation:pop .28s ease}
+  @keyframes pop{0%{opacity:.85}100%{opacity:0}}
+  #count{position:absolute;inset:0;display:none;align-items:center;justify-content:center;font-size:120px;font-weight:800;color:#fff;text-shadow:0 0 30px rgba(0,0,0,.6);pointer-events:none}
+  #count.on{display:flex}
+  #qrToast{position:absolute;left:16px;right:16px;bottom:210px;background:#111820;border:1px solid var(--teal);border-radius:14px;padding:14px 16px;display:none;z-index:6}
+  #qrToast.on{display:block}
+  #qrToast p{font-size:12px;color:var(--muted);margin-bottom:6px}
+  #qrToast a{color:var(--teal);font-weight:700;font-size:15px;word-break:break-all}
+
+  /* GALLERI HUB */
+  #galHead{position:absolute;top:0;left:0;right:0;z-index:3;padding:calc(env(safe-area-inset-top) + 14px) 16px 12px;
+    display:flex;align-items:center;justify-content:space-between;gap:8px;background:linear-gradient(to bottom,var(--bg),rgba(10,14,18,.92))}
+  #galHead h1{font-size:20px;font-weight:800;white-space:nowrap}
+  #galHead h1 span{color:var(--amber);font-weight:600;font-size:12px;margin-left:6px}
+  #galBtns{display:flex;gap:8px}
+  .gbtn{background:var(--glass);border:1px solid var(--glass-line);color:var(--text);font-weight:700;font-size:13px;padding:9px 12px;border-radius:100px;display:flex;align-items:center;gap:5px}
+  .gbtn.amber{background:var(--amber);color:#1a1f26;border-color:var(--amber)}
+  #moduleBar{position:absolute;top:calc(env(safe-area-inset-top) + 60px);left:0;right:0;z-index:2;display:flex;gap:8px;overflow-x:auto;padding:2px 12px 10px;scrollbar-width:none;background:var(--bg)}
+  #moduleBar::-webkit-scrollbar{display:none}
+  .mchip{flex:0 0 auto;background:var(--glass);border:1px solid var(--glass-line);color:var(--text);font-weight:700;font-size:13px;padding:8px 14px;border-radius:100px}
+  .mchip.active{background:var(--amber);color:#1a1f26;border-color:var(--amber)}
+  #galContent{position:absolute;top:calc(env(safe-area-inset-top) + 110px);left:0;right:0;bottom:74px;overflow-y:auto;padding:2px 3px 20px}
+  .dayHead{color:var(--text);font-weight:800;font-size:15px;padding:14px 10px 8px}
+  .mgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;padding:0 0 4px}
+  .cell{position:relative;aspect-ratio:1;background:#151a20;border-radius:4px;overflow:hidden}
+  .cell img,.cell video{width:100%;height:100%;object-fit:cover;display:block}
+  .cell .vb{position:absolute;bottom:4px;right:4px;background:rgba(0,0,0,.6);color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:100px}
+  .cell .fh{position:absolute;bottom:4px;left:4px;font-size:13px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.7))}
+  .cell .check{position:absolute;top:5px;right:5px;width:22px;height:22px;border-radius:50%;border:2px solid #fff;background:rgba(0,0,0,.35);display:none}
+  .cell.sel .check{display:block;background:var(--amber);border-color:var(--amber)}
+  .cell.sel::after{content:"";position:absolute;inset:0;border:3px solid var(--amber);border-radius:4px}
+  .modNote{color:var(--muted);text-align:center;padding:44px 24px;font-size:15px;line-height:1.55}
+  .modNote b{color:var(--text);display:block;font-size:17px;margin-bottom:6px}
+  #mapDiv{width:100%;border-radius:8px}
+  .backChip{display:inline-flex;align-items:center;gap:4px;background:var(--glass);border:1px solid var(--glass-line);color:var(--text);font-weight:700;font-size:13px;padding:8px 14px;border-radius:100px;margin:6px 10px 2px}
+  .albumCard{display:flex;align-items:center;gap:12px;padding:10px 12px;border-bottom:1px solid var(--glass-line)}
+  .albumCard img{width:56px;height:56px;border-radius:10px;object-fit:cover;background:#151a20;flex:0 0 auto}
+  .albumCard .an{font-weight:700}
+  .albumCard .ac{color:var(--muted);font-size:13px}
+  .trashRow{display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid var(--glass-line)}
+  .trashRow img,.trashRow video{width:52px;height:52px;border-radius:8px;object-fit:cover;background:#151a20;flex:0 0 auto}
+  .trashRow .tinfo{flex:1;font-size:13px;color:var(--muted)}
+  .trashRow button{background:var(--glass);border:1px solid var(--glass-line);color:var(--text);font-weight:700;font-size:12px;padding:7px 10px;border-radius:100px}
+  .trashRow .perm{color:var(--red);border-color:rgba(255,90,95,.4)}
+  #selBar{position:absolute;bottom:74px;left:0;right:0;display:none;gap:10px;padding:12px 16px;background:#111820;border-top:1px solid var(--glass-line);z-index:4}
+  #selBar.on{display:flex}
+  #selBar button{flex:1;background:var(--glass);border:1px solid var(--glass-line);color:var(--text);font-weight:700;font-size:14px;padding:11px;border-radius:12px}
+  #selBar .del{color:var(--red);border-color:rgba(255,90,95,.4)}
+
+  /* BUNDMENU */
+  #tabs{position:absolute;bottom:0;left:0;right:0;height:74px;padding-bottom:env(safe-area-inset-bottom);display:flex;background:#111820;border-top:1px solid var(--glass-line);z-index:5}
+  .tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:var(--muted);font-size:11px;font-weight:700;background:none;border:none}
+  .tab svg{width:24px;height:24px;stroke:var(--muted);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .tab.active{color:var(--amber)}
+  .tab.active svg{stroke:var(--amber)}
+
+  /* VISER */
+  #viewer{position:fixed;inset:0;background:#000;z-index:20;display:none;flex-direction:column}
+  #viewer.on{display:flex}
+  #viewImgWrap{flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden}
+  #viewImg{max-width:100%;max-height:100%;object-fit:contain}
+  #viewVid{max-width:100%;max-height:100%}
+  #viewBar{padding:calc(env(safe-area-inset-top) + 12px) 16px 12px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+  #viewBar .grp{display:flex;gap:8px}
+  #viewBar button{background:var(--glass);border:1px solid var(--glass-line);color:var(--text);font-weight:700;font-size:15px;padding:10px 14px;border-radius:100px}
+  #vTrash{color:var(--red);border-color:rgba(255,90,95,.4)}
+  #vFav.fav{background:var(--amber);color:#1a1f26;border-color:var(--amber)}
+  #viewMeta{text-align:center;color:var(--muted);font-size:12px;padding:2px 16px}
+  #viewFoot{padding:12px 16px calc(env(safe-area-inset-bottom) + 14px);display:flex;gap:10px;justify-content:center}
+  #viewFoot button{flex:1;max-width:140px;background:var(--glass);border:1px solid var(--glass-line);color:var(--text);font-weight:700;font-size:14px;padding:12px;border-radius:100px}
+  #vShare{background:var(--amber);color:#1a1f26;border-color:var(--amber)}
+
+  /* EDITOR */
+  #editor{position:fixed;inset:0;background:#000;z-index:25;display:none;flex-direction:column}
+  #editor.on{display:flex}
+  #editArea{flex:1;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center}
+  #editStage{position:relative;max-width:100%;max-height:100%}
+  #editImg{display:block;max-width:100%;max-height:100%;object-fit:contain}
+  .ov{position:absolute;transform:translate(-50%,-50%);touch-action:none;cursor:grab;padding:4px 6px;white-space:nowrap}
+  .ov.txt{color:#fff;font-weight:800;font-size:28px;text-shadow:0 2px 8px rgba(0,0,0,.6)}
+  .ov.emo{font-size:56px;line-height:1}
+  .ov.pick{outline:2px dashed rgba(255,255,255,.6)}
+  #editTop{padding:calc(env(safe-area-inset-top) + 12px) 16px 10px;display:flex;justify-content:space-between;align-items:center}
+  #editTop button{background:var(--glass);border:1px solid var(--glass-line);color:var(--text);font-weight:700;font-size:15px;padding:10px 16px;border-radius:100px}
+  #editSave{background:var(--amber);color:#1a1f26;border-color:var(--amber)}
+  #editFilters{display:flex;gap:8px;overflow-x:auto;padding:0 12px 6px;scrollbar-width:none}
+  #editFilters::-webkit-scrollbar{display:none}
+  #editFoot{padding:8px 12px calc(env(safe-area-inset-bottom) + 12px);display:flex;gap:10px;justify-content:center;align-items:center;flex-wrap:wrap}
+  #editFoot button{background:var(--glass);border:1px solid var(--glass-line);color:var(--text);font-weight:700;font-size:14px;padding:10px 14px;border-radius:100px}
+  #emojiRow{display:none;gap:6px;flex-wrap:wrap;justify-content:center;padding:0 12px 6px}
+  #emojiRow.on{display:flex}
+  #emojiRow button{font-size:28px;background:var(--glass);border:1px solid var(--glass-line);border-radius:12px;padding:4px 8px;line-height:1}
+  #delOv{color:var(--red);border-color:rgba(255,90,95,.4)!important;display:none}
+  #delOv.on{display:inline-block}
+
+  #overlay{position:absolute;inset:0;bottom:74px;background:rgba(6,9,12,.94);z-index:8;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:32px;gap:16px}
+  #overlay h1{font-size:25px;font-weight:800}
+  #overlay h1 span{color:var(--amber)}
+  #overlay p{color:var(--muted);font-size:15px;max-width:320px;line-height:1.5}
+  #startBtn{margin-top:4px;background:var(--amber);color:#1a1f26;border:none;font-weight:800;font-size:17px;padding:14px 32px;border-radius:100px;box-shadow:0 0 24px rgba(255,180,84,.45)}
+  .badge{display:flex;align-items:center;gap:9px;color:var(--teal);font-weight:700;font-size:13px;letter-spacing:1px;text-transform:uppercase}
+  #errMsg{color:var(--red);font-weight:600;display:none}
+  .hidden{display:none!important}
+  #themeSheet{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:30;display:none;align-items:flex-end}
+  #themeSheet.on{display:flex}
+  #themeCard{background:#111820;width:100%;border-radius:20px 20px 0 0;padding:22px 20px calc(env(safe-area-inset-bottom) + 22px)}
+  #themeCard h2{font-size:18px;font-weight:800;margin-bottom:14px}
+  #swatches{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+  .sw{width:44px;height:44px;border-radius:50%;border:3px solid transparent}
+  .sw.active{border-color:#fff}
+  #themeClose{width:100%;background:var(--amber);color:#1a1f26;border:none;font-weight:800;font-size:16px;padding:13px;border-radius:100px}
+  #searchBar{position:absolute;top:calc(env(safe-area-inset-top) + 102px);left:0;right:0;z-index:2;display:none;flex-direction:column;gap:8px;padding:0 12px 8px;background:var(--bg)}
+  #searchBar.on{display:flex}
+  #searchInput{width:100%;background:var(--glass);border:1px solid var(--glass-line);color:var(--text);font-size:15px;padding:10px 14px;border-radius:100px;outline:none}
+  #searchInput::placeholder{color:var(--muted)}
+  #searchChips{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none}
+  #searchChips::-webkit-scrollbar{display:none}
+  .schip{flex:0 0 auto;background:var(--glass);border:1px solid var(--glass-line);color:var(--text);font-weight:700;font-size:12px;padding:6px 12px;border-radius:100px}
+  .schip.active{background:var(--amber);color:#1a1f26;border-color:var(--amber)}
+  #galContent.withSearch{top:calc(env(safe-area-inset-top) + 192px)}
+  #editTools{display:flex;gap:8px;overflow-x:auto;padding:6px 12px;scrollbar-width:none}
+  #editTools::-webkit-scrollbar{display:none}
+  #editTools button{flex:0 0 auto;background:var(--glass);border:1px solid var(--glass-line);color:var(--text);font-weight:700;font-size:13px;padding:8px 12px;border-radius:100px}
+  #editTools .ratio.active{background:var(--amber);color:#1a1f26;border-color:var(--amber)}
+  .setLbl{color:var(--muted);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px}
+  #installBtn.setBtn{width:100%;background:var(--glass);border:1px solid var(--glass-line);color:var(--text);font-weight:700;font-size:15px;padding:13px;border-radius:100px;margin-bottom:10px}
+  #homeScreen{overflow-y:auto;background:linear-gradient(160deg,#eef1fa,#f6f0f5 55%,#fdf3ec);color:#2a2f3a}
+  #homeInner{min-height:100%;padding:calc(env(safe-area-inset-top) + 6px) 0 96px}
+  #ringArea{position:relative;width:100%}
+  #ringSvg{position:absolute;inset:0;width:100%;height:100%}
+  #ringCenter{position:absolute;top:50%;left:50%;transform:translate(-50%,-52%);text-align:center;width:64%;pointer-events:none}
+  #lens{display:flex;justify-content:center}
+  #homeTitle{font-size:24px;font-weight:800;margin-top:6px;color:#2a2f3a}
+  #homeTitle span{color:#1d9e75}
+  #homeTag{font-size:12px;color:#8a8f9a;margin-top:2px}
+  .rnode{position:absolute;transform:translate(-50%,-50%);width:82px;text-align:center;cursor:pointer}
+  .rnode:active .ric{transform:scale(.94)}
+  .ric{display:inline-flex;align-items:center;justify-content:center;width:52px;height:52px;border-radius:50%;background:#fff;box-shadow:0 6px 16px rgba(80,90,140,.18);transition:transform .12s}
+  .ric svg{width:24px;height:24px}
+  .rnode b{display:block;font-size:12px;font-weight:700;color:#2a2f3a;margin-top:5px;letter-spacing:.2px}
+  .rnode small{display:block;font-size:10px;color:#8a8f9a;line-height:1.2}
+  #homeStrip{margin:6px 16px 0;background:rgba(255,255,255,.75);border-radius:18px;padding:14px;display:grid;grid-template-columns:1fr 1fr;gap:14px 12px}
+  .stripItem{display:flex;align-items:center;gap:10px}
+  .stripItem .si{flex:0 0 auto;width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:#fff;box-shadow:0 3px 8px rgba(80,90,140,.15)}
+  .stripItem .si svg{width:18px;height:18px}
+  .stripItem b{font-size:12px;font-weight:700;color:#2a2f3a;display:block}
+  .stripItem small{font-size:10px;color:#8a8f9a}
+  #profScreen{overflow-y:auto;background:var(--bg)}
+  #profInner{padding:calc(env(safe-area-inset-top) + 18px) 16px 96px}
+  .profHead{display:flex;align-items:center;gap:14px;margin-bottom:18px}
+  .pavatar{width:56px;height:56px;border-radius:50%;background:var(--amber);color:#1a1f26;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:20px}
+  .pname{font-size:18px;font-weight:800}
+  .psub{color:var(--muted);font-size:13px}
+  .pcard{background:#111820;border:1px solid var(--glass-line);border-radius:14px;padding:14px 16px;margin-bottom:12px}
+  .pcardlbl{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:1px}
+  .pcardval{font-size:22px;font-weight:800;margin-top:4px}
+  .pbar{height:6px;border-radius:100px;background:rgba(255,255,255,.1);margin-top:10px;overflow:hidden}
+  .pbar span{display:block;height:100%;width:0;background:var(--amber);transition:width .3s}
+  .prow{width:100%;display:flex;align-items:center;justify-content:space-between;background:#111820;border:1px solid var(--glass-line);border-radius:14px;padding:15px 16px;margin-bottom:10px;color:var(--text);font-weight:600;font-size:15px}
+  .pchev{color:var(--muted);font-size:20px}
+  .pcard.soon b{display:block;color:var(--teal);font-size:13px;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px}
+  .pcard.soon p{color:var(--muted);font-size:14px;line-height:1.5;margin:0}
+  .pabout{text-align:center;color:var(--muted);font-size:12px;margin-top:16px;line-height:1.6}
+  #createSheet{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:30;display:none;align-items:flex-end}
+  #createSheet.on{display:flex}
+  #createCard{background:#111820;width:100%;border-radius:20px 20px 0 0;padding:18px 16px calc(env(safe-area-inset-bottom) + 18px)}
+  #createCard h2{font-size:18px;font-weight:800;margin:0 0 8px;padding:0 4px}
+  .crow{width:100%;display:flex;align-items:center;gap:14px;background:none;border:none;color:var(--text);padding:14px 8px;border-bottom:1px solid var(--glass-line);font-size:16px;font-weight:600;text-align:left}
+  .crow:last-child{border-bottom:none}
+  .crow svg{width:22px;height:22px;stroke:var(--amber);flex:0 0 auto}
+  @media (prefers-reduced-motion:reduce){#flash.pop{animation:none}}
+</style>
+</head>
+<body>
+
+<section id="homeScreen" class="screen active">
+  <div id="homeInner">
+    <div id="ringArea">
+      <svg id="ringSvg" viewBox="0 0 100 100" preserveAspectRatio="none" fill="none"><circle cx="50" cy="50" r="35" stroke="#cfd6ea" stroke-width="0.5"/></svg>
+      <div id="ringCenter">
+        <div id="lens">
+          <svg viewBox="0 0 100 100" width="120" height="120" fill="none">
+            <defs><linearGradient id="lensg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#46d3c8"/><stop offset="1" stop-color="#ffb454"/></linearGradient></defs>
+            <circle cx="50" cy="50" r="46" stroke="url(#lensg)" stroke-width="3"/>
+            <circle cx="50" cy="50" r="39" fill="#141922"/>
+            <circle cx="50" cy="50" r="30" fill="#1e2f40"/>
+            <circle cx="50" cy="50" r="18" fill="#0c1016"/>
+            <circle cx="41" cy="41" r="6" fill="#ffffff" opacity="0.45"/>
+          </svg>
+        </div>
+        <div id="homeTitle">My<span>Eye</span></div>
+        <div id="homeTag">Fang øjeblikket. Skab minderne.</div>
+      </div>
+      <div id="ringNodes"></div>
+    </div>
+    <div id="homeStrip">
+      <div class="stripItem"><span class="si" style="color:#ef9f27"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12c1 1 1 2 1 3h6c0-1 0-2 1-3a7 7 0 0 0-4-12z"/></svg></span><div><b>Kreativitet</b><small>Slip fantasien løs</small></div></div>
+      <div class="stripItem"><span class="si" style="color:#1d9e75"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span><div><b>Sikkerhed</b><small>Dine minder er vigtige</small></div></div>
+      <div class="stripItem"><span class="si" style="color:#378add"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10a4 4 0 0 0-7.7-1.4A4 4 0 1 0 6 16h11a3.5 3.5 0 0 0 1-6.9z"/></svg></span><div><b>Backup</b><small>Kommer snart</small></div></div>
+      <div class="stripItem"><span class="si" style="color:#7f77dd"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg></span><div><b>Deling</b><small>Del med dem du holder af</small></div></div>
+    </div>
+  </div>
+</section>
+
+<section id="camScreen" class="screen">
+  <div id="stage">
+    <video id="video" playsinline autoplay muted></video>
+    <div id="grid3"><span class="gv1"></span><span class="gv2"></span><span class="gh1"></span><span class="gh2"></span></div>
+    <div id="reticle"><div class="ret-line ret-h"></div><div class="ret-line ret-v"></div>
+      <div class="corner c-tl"></div><div class="corner c-tr"></div><div class="corner c-bl"></div><div class="corner c-br"></div></div>
+    <div id="flash"></div><div id="count"></div>
+    <div id="topbar">
+      <div id="topLeft">
+        <button class="chip" id="timerChip"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M9 2h6"/></svg><span id="timerLbl">Off</span></button>
+        <button class="chip" id="gridChip"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/></svg></button>
+      </div>
+      <div id="topRight">
+        <button class="chip" id="qrChip"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3M21 14v7h-7"/></svg>QR</button>
+        <button class="chip" id="themeChip"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18 4 4 0 0 0 0-8 2 2 0 0 1 0-4 3 3 0 0 0 0-6z"/></svg></button>
+      </div>
+    </div>
+    <div id="zoomWrap"><div id="zoomRead">1.0<small>x</small></div><div id="digTag">Digital</div></div>
+    <div id="rail"><div class="rail-cap" id="maxCap">-</div><div id="track"><div id="fill"></div><div id="knob">1x</div></div><div class="rail-cap">1x</div></div>
+    <div id="presets"></div>
+    <div id="filterStrip"></div>
+    <div id="qrToast"><p>QR-kode fundet:</p><a id="qrLink" target="_blank" rel="noopener"></a></div>
+    <div id="overlay">
+      <div class="badge">&#9673; Optisk instrument</div>
+      <h1>Kikkert <span>Kamera</span></h1>
+      <p>Zoom, filtre, video og et smart galleri. Tryk start for kamera-adgang.</p>
+      <button id="startBtn">Start kamera</button>
+      <p id="errMsg"></p>
+    </div>
+  </div>
+  <div id="camControls">
+    <button class="round" id="torchBtn" aria-label="Lygte"><svg viewBox="0 0 24 24"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg></button>
+    <button id="shutter" aria-label="Tag foto"><span id="recTime">0:00</span><div id="shutterInner"></div></button>
+    <button class="round" id="flipBtn" aria-label="Skift kamera"><svg viewBox="0 0 24 24"><path d="M21 8a9 9 0 0 0-15-3L3 8"/><path d="M3 3v5h5"/><path d="M3 16a9 9 0 0 0 15 3l3-3"/><path d="M21 21v-5h-5"/></svg></button>
+  </div>
+</section>
+
+<section id="galScreen" class="screen">
+  <div id="galHead">
+    <h1>Galleri <span id="galCount"></span></h1>
+    <div id="galBtns">
+      <button class="gbtn" id="selectBtn">Vælg</button>
+      <button class="gbtn amber" id="importBtn">+ Importer</button>
+    </div>
+  </div>
+  <div id="moduleBar"></div>
+  <div id="searchBar"><input id="searchInput" type="search" placeholder="Søg i album, dato…"><div id="searchChips"></div></div>
+  <div id="galContent"></div>
+  <div id="selBar"><button id="selCollage">Collage</button><button id="selShare">Del</button><button id="selDownload">Download</button><button class="del" id="selDelete">Slet</button></div>
+</section>
+
+<section id="profScreen" class="screen">
+  <div id="profInner">
+    <div class="profHead"><div class="pavatar">MW</div><div><div class="pname">Mohammed Warrad</div><div class="psub">MyEye</div></div></div>
+    <div class="pcard"><div class="pcardlbl">Lager brugt</div><div id="storageVal" class="pcardval">–</div><div class="pbar"><span id="storageBar"></span></div></div>
+    <button class="prow" id="rowTheme"><span>Udseende / tema</span><span class="pchev">›</span></button>
+    <button class="prow" id="rowInstall"><span>Føj til hjemmeskærm</span><span class="pchev">›</span></button>
+    <div id="cloudPanel"></div>
+    <div class="pabout">MyEye · Udviklet af Mohammed Warrad<br>© 2026 MW Groupe</div>
+  </div>
+</section>
+
+<div id="createSheet"><div id="createCard">
+  <h2>Opret</h2>
+  <button class="crow" data-act="foto"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>Tag billede</button>
+  <button class="crow" data-act="video"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>Optag video</button>
+  <button class="crow" data-act="upload"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>Upload billeder</button>
+  <button class="crow" data-act="album"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Opret album</button>
+  <button class="crow" data-act="doc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>Scan dokument</button>
+  <button class="crow" data-act="collage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="8"/><rect x="13" y="3" width="8" height="8"/><rect x="3" y="13" width="8" height="8"/><rect x="13" y="13" width="8" height="8"/></svg>Opret collage</button>
+  <button class="crow" data-act="luk" style="justify-content:center;color:var(--muted)">Luk</button>
+</div></div>
+
+<input id="editInput" type="file" accept="image/*" class="hidden">
+
+<nav id="tabs">
+  <button class="tab active" data-screen="homeScreen"><svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>Hjem</button>
+  <button class="tab" data-screen="camScreen"><svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>Kamera</button>
+  <button class="tab" data-screen="galScreen"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>Galleri</button>
+  <button class="tab" id="createTab"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>Opret</button>
+  <button class="tab" data-screen="profScreen"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>Profil</button>
+</nav>
+
+<div id="viewer">
+  <div id="viewBar">
+    <button id="vBack">&#8249; Tilbage</button>
+    <div class="grp"><button id="vFav">&#9825;</button><button id="vTrash">Slet</button></div>
+  </div>
+  <div id="viewImgWrap"><img id="viewImg" alt="Foto"><video id="viewVid" controls playsinline class="hidden"></video></div>
+  <div id="viewMeta"></div>
+  <div id="viewFoot"><button id="vDownload">Gem</button><button id="vAlbum">Album</button><button id="vShare">Del</button></div>
+</div>
+
+<div id="editor">
+  <div id="editTop"><button id="editCancel">Kassér</button><button id="editSave">Gem</button></div>
+  <div id="editArea"><div id="editStage"><img id="editImg" alt="Rediger"></div></div>
+  <div id="editTools"><button id="rotateBtn">Rotér</button><button class="ratio active" data-r="free">Fri</button><button class="ratio" data-r="1">1:1</button><button class="ratio" data-r="1.3333">4:3</button><button class="ratio" data-r="1.7778">16:9</button></div>
+  <div id="editFilters"></div>
+  <div id="emojiRow"></div>
+  <div id="editFoot"><button id="addText">Tekst</button><button id="addEmoji">Emoji</button><button id="delOv">Slet valgt</button></div>
+</div>
+
+<div id="themeSheet"><div id="themeCard"><h2>Indstillinger</h2><p class="setLbl">Farve</p><div id="swatches"></div><button id="installBtn" class="setBtn">＋ Føj til hjemmeskærm</button><button id="themeClose">Færdig</button></div></div>
+<input id="fileInput" type="file" accept="image/*,video/*" multiple class="hidden">
+
+<script>
+(function(){
+  "use strict";
+  var $=function(id){return document.getElementById(id);};
+  function el(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e;}
+  var MON=['jan.','feb.','mar.','apr.','maj','jun.','jul.','aug.','sep.','okt.','nov.','dec.'];
+  var MONF=['januar','februar','marts','april','maj','juni','juli','august','september','oktober','november','december'];
+
+  /* ---------- IndexedDB ---------- */
+  var DB_NAME='kikkertkamera',STORE='photos',db=null;
+  function openDB(){return new Promise(function(res,rej){
+    var r=indexedDB.open(DB_NAME,1);
+    r.onupgradeneeded=function(e){var d=e.target.result;if(!d.objectStoreNames.contains(STORE))d.createObjectStore(STORE,{keyPath:'id'});};
+    r.onsuccess=function(e){db=e.target.result;res(db);};r.onerror=function(e){rej(e);};
+  });}
+  function saveItem(blob,kind,meta){meta=meta||{};return new Promise(function(res,rej){
+    var id=Date.now()+'-'+Math.random().toString(36).slice(2,7);
+    var rec={id:id,blob:blob,kind:kind||'photo',created:Date.now(),
+      taken:(meta.taken||Date.now()),lat:(meta.lat!=null?meta.lat:null),lng:(meta.lng!=null?meta.lng:null),
+      fav:false,album:null,deleted:false,deletedAt:null};
+    var tx=db.transaction(STORE,'readwrite');tx.objectStore(STORE).put(rec);
+    tx.oncomplete=function(){res(id);};tx.onerror=function(e){rej(e);};
+  });}
+  function updateRec(rec){return new Promise(function(res,rej){var tx=db.transaction(STORE,'readwrite');tx.objectStore(STORE).put(rec);tx.oncomplete=function(){res();};tx.onerror=function(e){rej(e);};});}
+  function allItems(){return new Promise(function(res,rej){var tx=db.transaction(STORE,'readonly');var rq=tx.objectStore(STORE).getAll();rq.onsuccess=function(){res(rq.result);};rq.onerror=function(e){rej(e);};});}
+  function delItem(id){return new Promise(function(res,rej){var tx=db.transaction(STORE,'readwrite');tx.objectStore(STORE).delete(id);tx.oncomplete=function(){res();};tx.onerror=function(e){rej(e);};});}
+
+  /* ---------- EXIF (dato + GPS) ---------- */
+  function readEXIF(buf){try{
+    var dv=new DataView(buf);if(dv.getUint16(0)!==0xFFD8)return null;
+    var off=2,len=dv.byteLength;
+    while(off<len){var m=dv.getUint16(off);if(m===0xFFE1)return parseExif(dv,off+4);
+      if((m&0xFF00)!==0xFF00)break;off+=2+dv.getUint16(off+2);}
+  }catch(e){}return null;}
+  function parseExif(dv,start){
+    if(dv.getUint32(start)!==0x45786966)return null;
+    var tiff=start+6,little=dv.getUint16(tiff)===0x4949;
+    function u16(o){return dv.getUint16(o,little);}function u32(o){return dv.getUint32(o,little);}
+    if(u16(tiff+2)!==0x002A)return null;
+    var ifd0=tiff+u32(tiff+4),res={},exifPtr=null,gpsPtr=null,i,n,entry,tag;
+    n=u16(ifd0);
+    for(i=0;i<n;i++){entry=ifd0+2+i*12;tag=u16(entry);if(tag===0x8769)exifPtr=tiff+u32(entry+8);else if(tag===0x8825)gpsPtr=tiff+u32(entry+8);}
+    if(exifPtr){n=u16(exifPtr);for(i=0;i<n;i++){entry=exifPtr+2+i*12;tag=u16(entry);if(tag===0x9003){var c=u32(entry+4),o=c>4?tiff+u32(entry+8):entry+8,s='',j;for(j=0;j<c-1;j++)s+=String.fromCharCode(dv.getUint8(o+j));res.date=s;}}}
+    if(gpsPtr){var latRef,lngRef,lat,lng;n=u16(gpsPtr);
+      function rats(o,cnt){var a=[],k;for(k=0;k<cnt;k++){var nu=u32(o+k*8),de=u32(o+k*8+4);a.push(de?nu/de:0);}return a;}
+      for(i=0;i<n;i++){entry=gpsPtr+2+i*12;tag=u16(entry);
+        if(tag===1)latRef=String.fromCharCode(dv.getUint8(entry+8));
+        else if(tag===3)lngRef=String.fromCharCode(dv.getUint8(entry+8));
+        else if(tag===2)lat=rats(tiff+u32(entry+8),3);
+        else if(tag===4)lng=rats(tiff+u32(entry+8),3);}
+      if(lat&&lng){var la=lat[0]+lat[1]/60+lat[2]/3600;if(latRef==='S')la=-la;var lo=lng[0]+lng[1]/60+lng[2]/3600;if(lngRef==='W')lo=-lo;res.lat=la;res.lng=lo;}}
+    return res;
+  }
+  function exifTs(s){try{var p=s.split(' ');var d=p[0].replace(/:/g,'-');var t=new Date(d+'T'+(p[1]||'00:00:00')).getTime();return t||Date.now();}catch(e){return Date.now();}}
+
+  /* ---------- Geoposition ---------- */
+  var lastPos=null;
+  function updatePos(){if(navigator.geolocation)navigator.geolocation.getCurrentPosition(function(p){lastPos={lat:p.coords.latitude,lng:p.coords.longitude};},function(){},{maximumAge:60000,timeout:4000});}
+
+  /* ---------- Elementer ---------- */
+  var video=$('video'),zoomRead=$('zoomRead'),digTag=$('digTag'),rail=$('rail'),track=$('track'),fill=$('fill'),knob=$('knob'),
+    maxCap=$('maxCap'),presets=$('presets'),overlay=$('overlay'),startBtn=$('startBtn'),errMsg=$('errMsg'),shutter=$('shutter'),
+    flipBtn=$('flipBtn'),torchBtn=$('torchBtn'),flash=$('flash'),reticle=$('reticle'),galCount=$('galCount'),importBtn=$('importBtn'),
+    fileInput=$('fileInput'),viewer=$('viewer'),viewImg=$('viewImg'),viewVid=$('viewVid'),filterStrip=$('filterStrip'),grid3=$('grid3'),
+    count=$('count'),recTime=$('recTime'),timerChip=$('timerChip'),timerLbl=$('timerLbl'),gridChip=$('gridChip'),qrChip=$('qrChip'),
+    qrToast=$('qrToast'),qrLink=$('qrLink'),themeChip=$('themeChip'),moduleBar=$('moduleBar'),galContent=$('galContent'),viewMeta=$('viewMeta');
+
+  /* ---------- Filtre ---------- */
+  var FILTERS=[{n:'Ingen',f:'none'},{n:'S/H',f:'grayscale(1) contrast(1.05)'},{n:'Varm',f:'saturate(1.3) sepia(.25) contrast(1.05)'},
+    {n:'Kold',f:'saturate(1.1) hue-rotate(-12deg) brightness(1.05)'},{n:'Vintage',f:'sepia(.5) contrast(.95) brightness(1.05) saturate(1.2)'},
+    {n:'Klar',f:'brightness(1.12) contrast(1.1) saturate(1.15)'},{n:'Drama',f:'contrast(1.4) brightness(.95) saturate(1.1)'},{n:'Neon',f:'saturate(2) hue-rotate(15deg) contrast(1.1)'}];
+  var camFilter='none';
+  function buildFilterStrip(){filterStrip.innerHTML='';FILTERS.forEach(function(fl){var b=el('button','fchip'+(fl.f===camFilter?' active':''),fl.n);
+    b.addEventListener('click',function(){camFilter=fl.f;video.style.filter=fl.f==='none'?'':fl.f;[].slice.call(filterStrip.children).forEach(function(c){c.classList.remove('active');});b.classList.add('active');});filterStrip.appendChild(b);});}
+
+  /* ---------- Kamera ---------- */
+  var stream=null,trackObj=null,caps=null,facing='environment',nativeMax=1,hasNativeZoom=false,digitalMaxMult=6,totalMin=1,totalMax=1,current=1,hasTorch=false,torchOn=false;
+  function err(m){errMsg.style.display='block';errMsg.innerHTML=m;}
+  function insecure(){return !window.isSecureContext||location.protocol==='content:'||location.protocol==='file:';}
+  function startCam(){
+    errMsg.style.display='none';
+    if(insecure()){err('Åbn appen via din https-adresse (github.io), ikke som lokal fil.');return;}
+    if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){err('Din browser understøtter ikke kamera. Prøv Chrome eller Safari.');return;}
+    var wantHi=(facing==='environment');
+    var vc=wantHi?{facingMode:{ideal:facing},width:{ideal:3840},height:{ideal:2160}}:{facingMode:{ideal:facing}};
+    if(stream)stream.getTracks().forEach(function(t){t.stop();});
+    navigator.mediaDevices.getUserMedia({video:vc,audio:true}).then(onCam).catch(function(e){
+      if(wantHi){navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:facing}},audio:true}).then(onCam).catch(showCamErr);return;}showCamErr(e);});
+  }
+  function onCam(s){stream=s;video.srcObject=s;trackObj=s.getVideoTracks()[0];caps=trackObj.getCapabilities?trackObj.getCapabilities():{};
+    video.classList.toggle('mirror',facing==='user');setupZoom();setupTorch();overlay.classList.add('hidden');updatePos();}
+  function showCamErr(e){if(e&&e.name==='NotAllowedError')err('Kamera-adgang blev afvist. Tryk "Tillad" når browseren spørger.');
+    else if(e&&e.name==='NotFoundError')err('Fandt intet kamera på denne enhed.');else err('Kunne ikke starte kameraet: '+(e&&e.message?e.message:e));overlay.classList.remove('hidden');}
+  function setupZoom(){hasNativeZoom=!!(caps&&caps.zoom);nativeMax=hasNativeZoom?(caps.zoom.max||1):1;totalMin=1;totalMax=Math.max(nativeMax,1)*digitalMaxMult;current=1;maxCap.textContent=Math.round(totalMax)+'x';buildPresets();applyZoom(1);}
+  function buildPresets(){presets.innerHTML='';var vals=[1];if(nativeMax>=2)vals.push(2);if(nativeMax>=3)vals.push(Math.round(nativeMax));
+    var d=Math.round(totalMax);[Math.round(totalMax/2),d].forEach(function(v){if(v>vals[vals.length-1])vals.push(v);});
+    vals=vals.filter(function(v,i){return vals.indexOf(v)===i&&v>=1&&v<=totalMax;}).slice(0,5);
+    vals.forEach(function(v){var b=el('button','preset',(v>=10?Math.round(v):(v%1?v.toFixed(1):v))+'x');b.dataset.v=v;b.addEventListener('click',function(){applyZoom(v);});presets.appendChild(b);});}
+  function applyZoom(total){total=Math.min(Math.max(total,totalMin),totalMax);current=total;var nv=Math.min(total,nativeMax),dig=total/nv;
+    if(hasNativeZoom){try{trackObj.applyConstraints({advanced:[{zoom:nv}]});}catch(e){}}
+    var base='translate(-50%,-50%)'+(facing==='user'?' scaleX(-1)':'');video.style.transform=base+' scale('+dig.toFixed(3)+')';
+    digTag.classList.toggle('on',dig>1.001);reticle.classList.toggle('hide',total<1.05);var s=total>=10?total.toFixed(0):total.toFixed(1);
+    zoomRead.innerHTML=s+'<small>x</small>';knob.textContent=(total>=10?total.toFixed(0):total.toFixed(1))+'x';
+    var t=Math.log(total/totalMin)/Math.log(totalMax/totalMin),h=track.clientHeight;knob.style.bottom=(t*(h-38)+2)+'px';knob.style.top='auto';fill.style.height=(t*100)+'%';
+    [].slice.call(document.querySelectorAll('.preset')).forEach(function(p){p.classList.toggle('active',Math.abs(parseFloat(p.dataset.v)-total)<.05);});}
+  var dragging=false;
+  function railZoom(y){var r=track.getBoundingClientRect();var t=1-(y-r.top)/r.height;t=Math.min(Math.max(t,0),1);applyZoom(totalMin*Math.pow(totalMax/totalMin,t));}
+  function dn(e){dragging=true;mv(e);}function mv(e){if(!dragging)return;e.preventDefault();railZoom(e.touches?e.touches[0].clientY:e.clientY);}function up(){dragging=false;}
+  rail.addEventListener('touchstart',dn,{passive:false});rail.addEventListener('touchmove',mv,{passive:false});rail.addEventListener('touchend',up);
+  rail.addEventListener('mousedown',dn);window.addEventListener('mousemove',mv);window.addEventListener('mouseup',up);
+  var pStart=0,pZoom=1;
+  video.parentElement.addEventListener('touchstart',function(e){if(e.touches.length===2){pStart=dist(e.touches);pZoom=current;}},{passive:false});
+  video.parentElement.addEventListener('touchmove',function(e){if(e.touches.length===2){e.preventDefault();applyZoom(pZoom*dist(e.touches)/pStart);}},{passive:false});
+  function dist(t){return Math.hypot(t[0].clientX-t[1].clientX,t[0].clientY-t[1].clientY);}
+  function setupTorch(){hasTorch=!!(caps&&caps.torch);torchBtn.style.opacity=hasTorch?'1':'.35';torchOn=false;torchBtn.classList.remove('on');}
+  torchBtn.addEventListener('click',function(){if(!hasTorch)return;torchOn=!torchOn;try{trackObj.applyConstraints({advanced:[{torch:torchOn}]});}catch(e){}torchBtn.classList.toggle('on',torchOn);});
+  flipBtn.addEventListener('click',function(){facing=(facing==='environment')?'user':'environment';startCam();});
+
+  var TIMERS=[0,3,5,10],ti=0;
+  timerChip.addEventListener('click',function(){ti=(ti+1)%TIMERS.length;var v=TIMERS[ti];timerLbl.textContent=v?v+'s':'Off';timerChip.classList.toggle('on',v>0);});
+  gridChip.addEventListener('click',function(){grid3.classList.toggle('on');gridChip.classList.toggle('on',grid3.classList.contains('on'));});
+  function runCountdown(sec){return new Promise(function(res){if(!sec){res();return;}var n=sec;count.classList.add('on');count.textContent=n;var iv=setInterval(function(){n--;if(n<=0){clearInterval(iv);count.classList.remove('on');res();}else count.textContent=n;},1000);});}
+
+  function grabFrame(){var vw=video.videoWidth,vh=video.videoHeight;if(!vw)return null;var dig=current/Math.min(current,nativeMax);
+    var sw=vw/dig,sh=vh/dig,sx=(vw-sw)/2,sy=(vh-sh)/2;var cv=document.createElement('canvas');cv.width=Math.round(sw);cv.height=Math.round(sh);
+    var ctx=cv.getContext('2d');if(camFilter!=='none')ctx.filter=camFilter;if(facing==='user'){ctx.translate(cv.width,0);ctx.scale(-1,1);}
+    ctx.drawImage(video,sx,sy,sw,sh,0,0,cv.width,cv.height);return cv;}
+  function takePhoto(){var cv=grabFrame();if(!cv)return;updatePos();flash.classList.remove('pop');void flash.offsetWidth;flash.classList.add('pop');
+    cv.toBlob(function(blob){openEditor(blob);},'image/jpeg',.95);}
+
+  var rec=null,chunks=[],recTimer=null,recSecs=0,recording=false;
+  function startRec(){if(!stream)return;var opts={};['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm','video/mp4'].some(function(m){if(window.MediaRecorder&&MediaRecorder.isTypeSupported(m)){opts.mimeType=m;return true;}return false;});
+    try{rec=new MediaRecorder(stream,opts);}catch(e){try{rec=new MediaRecorder(stream);}catch(e2){alert('Video understøttes ikke i denne browser.');return;}}
+    chunks=[];rec.ondataavailable=function(e){if(e.data&&e.data.size)chunks.push(e.data);};
+    rec.onstop=function(){var blob=new Blob(chunks,{type:(rec.mimeType||'video/webm')});saveItem(blob,'video',{taken:Date.now(),lat:lastPos&&lastPos.lat,lng:lastPos&&lastPos.lng}).then(refreshGallery);};
+    rec.start();recording=true;shutter.classList.add('rec');recSecs=0;recTime.textContent='0:00';recTime.classList.add('on');
+    recTimer=setInterval(function(){recSecs++;var m=Math.floor(recSecs/60),s=recSecs%60;recTime.textContent=m+':'+(s<10?'0':'')+s;},1000);}
+  function stopRec(){if(rec&&recording){try{rec.stop();}catch(e){}}recording=false;shutter.classList.remove('rec');recTime.classList.remove('on');if(recTimer){clearInterval(recTimer);recTimer=null;}}
+  var holdTimer=null,didHold=false;
+  shutter.addEventListener('pointerdown',function(){didHold=false;holdTimer=setTimeout(function(){didHold=true;startRec();},450);});
+  function shutterUp(){if(holdTimer){clearTimeout(holdTimer);holdTimer=null;}if(recording){stopRec();return;}if(!didHold){runCountdown(TIMERS[ti]).then(takePhoto);}}
+  shutter.addEventListener('pointerup',shutterUp);shutter.addEventListener('pointercancel',shutterUp);
+
+  var qrOn=false,qrRAF=null,detector=null;
+  if('BarcodeDetector' in window){try{detector=new window.BarcodeDetector({formats:['qr_code']});}catch(e){detector=null;}}
+  if(!detector)qrChip.style.opacity='.4';
+  qrChip.addEventListener('click',function(){if(!detector){alert('QR-scanning understøttes ikke i denne browser.');return;}qrOn=!qrOn;qrChip.classList.toggle('on',qrOn);if(qrOn)scanQR();else{qrToast.classList.remove('on');if(qrRAF)cancelAnimationFrame(qrRAF);}});
+  function scanQR(){if(!qrOn||!detector||!video.videoWidth){qrRAF=requestAnimationFrame(scanQR);return;}
+    detector.detect(video).then(function(codes){if(codes&&codes.length){var v=codes[0].rawValue;qrLink.textContent=v;qrLink.href=/^https?:\/\//i.test(v)?v:'#';qrToast.classList.add('on');}}).catch(function(){});qrRAF=requestAnimationFrame(scanQR);}
+
+  /* ---------- Editor ---------- */
+  var editor=$('editor'),editImg=$('editImg'),editStage=$('editStage'),editFilters=$('editFilters'),emojiRow=$('emojiRow'),delOv=$('delOv');
+  var editBlobUrl=null,editFilter='none',pickedOv=null;
+  var EMOJIS=['😀','😎','😍','🔥','⭐','❤️','👍','🎉','🐶','🐱','🌈','💯','📸','✨','😂','👀'];
+  function openEditor(blob){if(editBlobUrl)URL.revokeObjectURL(editBlobUrl);editBlobUrl=URL.createObjectURL(blob);editImg.src=editBlobUrl;
+    editFilter='none';editImg.style.filter='';pickedOv=null;delOv.classList.remove('on');
+    [].slice.call(editStage.querySelectorAll('.ov')).forEach(function(o){o.remove();});buildEditFilters();buildEmojiRow();emojiRow.classList.remove('on');
+    editRot=0;editRatio='free';editStage.style.transform='';[].slice.call(document.querySelectorAll('#editTools .ratio')).forEach(function(x){x.classList.toggle('active',x.dataset.r==='free');});
+    editor.classList.add('on');}
+  function closeEditor(){editor.classList.remove('on');}
+  function buildEditFilters(){editFilters.innerHTML='';FILTERS.forEach(function(fl){var b=el('button','fchip'+(fl.f===editFilter?' active':''),fl.n);
+    b.addEventListener('click',function(){editFilter=fl.f;editImg.style.filter=fl.f==='none'?'':fl.f;[].slice.call(editFilters.children).forEach(function(c){c.classList.remove('active');});b.classList.add('active');});editFilters.appendChild(b);});}
+  function buildEmojiRow(){emojiRow.innerHTML='';EMOJIS.forEach(function(em){var b=el('button',null,em);b.addEventListener('click',function(){addOverlay('emo',em);emojiRow.classList.remove('on');});emojiRow.appendChild(b);});}
+  function pickOverlay(e2){if(pickedOv)pickedOv.classList.remove('pick');pickedOv=e2;if(e2)e2.classList.add('pick');delOv.classList.toggle('on',!!e2);}
+  function addOverlay(kind,content){var e2=el('div','ov '+(kind==='txt'?'txt':'emo'),content);e2.dataset.x=0.5;e2.dataset.y=0.5;e2.style.left='50%';e2.style.top='50%';editStage.appendChild(e2);makeDraggable(e2);pickOverlay(e2);}
+  function makeDraggable(e2){var sx,sy,ox,oy,drag=false;
+    e2.addEventListener('pointerdown',function(ev){ev.stopPropagation();pickOverlay(e2);drag=true;e2.setPointerCapture(ev.pointerId);var r=editStage.getBoundingClientRect();sx=ev.clientX;sy=ev.clientY;ox=parseFloat(e2.dataset.x)*r.width;oy=parseFloat(e2.dataset.y)*r.height;});
+    e2.addEventListener('pointermove',function(ev){if(!drag)return;var r=editStage.getBoundingClientRect();var nx=(ox+(ev.clientX-sx))/r.width,ny=(oy+(ev.clientY-sy))/r.height;nx=Math.min(Math.max(nx,0),1);ny=Math.min(Math.max(ny,0),1);e2.dataset.x=nx;e2.dataset.y=ny;e2.style.left=(nx*100)+'%';e2.style.top=(ny*100)+'%';});
+    e2.addEventListener('pointerup',function(){drag=false;});}
+  editImg.addEventListener('pointerdown',function(){pickOverlay(null);});
+  $('addText').addEventListener('click',function(){var t=prompt('Skriv tekst:');if(t)addOverlay('txt',t);});
+  $('addEmoji').addEventListener('click',function(){emojiRow.classList.toggle('on');});
+  delOv.addEventListener('click',function(){if(pickedOv){pickedOv.remove();pickOverlay(null);}});
+  $('editCancel').addEventListener('click',closeEditor);
+  $('editSave').addEventListener('click',function(){var natW=editImg.naturalWidth,natH=editImg.naturalHeight;var cv=document.createElement('canvas');cv.width=natW;cv.height=natH;var ctx=cv.getContext('2d');
+    if(editFilter!=='none')ctx.filter=editFilter;ctx.drawImage(editImg,0,0,natW,natH);ctx.filter='none';
+    var rect=editImg.getBoundingClientRect(),scale=natW/rect.width;
+    [].slice.call(editStage.querySelectorAll('.ov')).forEach(function(o){var x=parseFloat(o.dataset.x)*natW,y=parseFloat(o.dataset.y)*natH;
+      if(o.classList.contains('txt')){var fs=28*scale;ctx.font='800 '+fs+'px -apple-system,Roboto,sans-serif';ctx.fillStyle='#fff';ctx.textAlign='center';ctx.textBaseline='middle';ctx.shadowColor='rgba(0,0,0,.6)';ctx.shadowBlur=8*scale;ctx.shadowOffsetY=2*scale;ctx.fillText(o.textContent,x,y);ctx.shadowColor='transparent';}
+      else{var es=56*scale;ctx.font=es+'px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(o.textContent,x,y);}});
+    var out=cv;
+    if(editRot%360!==0){var k=editRot%360,rc=document.createElement('canvas');if(k===90||k===270){rc.width=cv.height;rc.height=cv.width;}else{rc.width=cv.width;rc.height=cv.height;}var rx=rc.getContext('2d');rx.translate(rc.width/2,rc.height/2);rx.rotate(k*Math.PI/180);rx.drawImage(cv,-cv.width/2,-cv.height/2);out=rc;}
+    if(editRatio!=='free'){var ar=parseFloat(editRatio),cw=out.width,ch=out.height,tw,th;if(cw/ch>ar){th=ch;tw=Math.round(ch*ar);}else{tw=cw;th=Math.round(cw/ar);}var cc=document.createElement('canvas');cc.width=tw;cc.height=th;cc.getContext('2d').drawImage(out,(cw-tw)/2,(ch-th)/2,tw,th,0,0,tw,th);out=cc;}
+    out.toBlob(function(blob){saveItem(blob,'photo',{taken:Date.now(),lat:lastPos&&lastPos.lat,lng:lastPos&&lastPos.lng}).then(function(){closeEditor();switchTo('galScreen');});},'image/jpeg',.95);});
+
+  /* ---------- Import ---------- */
+  importBtn.addEventListener('click',function(){fileInput.click();});
+  fileInput.addEventListener('change',function(e){var files=[].slice.call(e.target.files),done=0;if(!files.length)return;
+    function fin(){done++;if(done===files.length){fileInput.value='';switchTo('galScreen');}}
+    files.forEach(function(f){
+      if(f.type.indexOf('image/')===0){
+        (f.arrayBuffer?f.arrayBuffer():readBuf(f)).then(function(buf){var ex=readEXIF(buf)||{};var taken=ex.date?exifTs(ex.date):(f.lastModified||Date.now());saveItem(f,'photo',{taken:taken,lat:ex.lat,lng:ex.lng}).then(fin);}).catch(function(){saveItem(f,'photo',{taken:f.lastModified||Date.now()}).then(fin);});
+      }else if(f.type.indexOf('video/')===0){saveItem(f,'video',{taken:f.lastModified||Date.now()}).then(fin);}else fin();
+    });});
+  function readBuf(f){return new Promise(function(res,rej){var r=new FileReader();r.onload=function(){res(r.result);};r.onerror=rej;r.readAsArrayBuffer(f);});}
+
+  /* ---------- Galleri hub ---------- */
+  var items=[],itemUrls={},currentMod='alle',selectedAlbum=null,selMode=false,selected={};
+  var MODULES=[['alle','Alle'],['steder','Steder'],['kalender','Kalender'],['album','Album'],['favoritter','Favoritter'],['video','Video'],['papirkurv','Papirkurv']];
+  function buildModuleBar(){moduleBar.innerHTML='';MODULES.forEach(function(m){var b=el('button','mchip'+(m[0]===currentMod?' active':''),m[1]);b.addEventListener('click',function(){currentMod=m[0];selectedAlbum=null;exitSelect();buildModuleBar();renderModule();});moduleBar.appendChild(b);});}
+  function urlFor(it){return itemUrls[it.id];}
+  function live(){return items.filter(function(it){return !it.deleted;});}
+  function refreshGallery(){Object.keys(itemUrls).forEach(function(k){URL.revokeObjectURL(itemUrls[k]);});itemUrls={};
+    return allItems().then(function(list){var now=Date.now();
+      var purge=list.filter(function(it){return it.deleted&&it.deletedAt&&(now-it.deletedAt>2592000000);});
+      purge.forEach(function(it){delItem(it.id);});
+      items=list.filter(function(it){return purge.indexOf(it)<0;});
+      items.forEach(function(it){itemUrls[it.id]=URL.createObjectURL(it.blob);});
+      var c=live().length;galCount.textContent=c?c+(c===1?' element':' elementer'):'';renderModule();});}
+
+  function dayLabel(ts){var d=new Date(ts),t=new Date();function sd(a,b){return a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate();}
+    if(sd(d,t))return 'I dag';var y=new Date(t.getTime()-86400000);if(sd(d,y))return 'I går';return d.getDate()+'. '+MON[d.getMonth()]+' '+d.getFullYear();}
+  function monthLabel(ts){var d=new Date(ts);return MONF[d.getMonth()][0].toUpperCase()+MONF[d.getMonth()].slice(1)+' '+d.getFullYear();}
+  function fmtMeta(it){var d=new Date(it.taken||it.created);var s=d.getDate()+'. '+MON[d.getMonth()]+' '+d.getFullYear()+' · '+d.getHours()+':'+(d.getMinutes()<10?'0':'')+d.getMinutes();if(it.lat!=null)s+=' · 📍';if(it.album)s+=' · '+it.album;return s;}
+
+  function buildCell(it){var cell=el('div','cell');cell.dataset.id=it.id;var u=urlFor(it);
+    if(it.kind==='video'){var vd=document.createElement('video');vd.src=u;vd.muted=true;vd.playsInline=true;vd.preload='metadata';cell.appendChild(vd);cell.appendChild(el('div','vb','▶'));}
+    else{var img=document.createElement('img');img.src=u;img.loading='lazy';cell.appendChild(img);}
+    if(it.fav)cell.appendChild(el('div','fh','❤️'));
+    cell.appendChild(el('div','check'));
+    if(selected[it.id])cell.classList.add('sel');
+    cell.addEventListener('click',function(){if(selMode)toggleSel(it.id,cell);else openViewer(it);});
+    return cell;}
+  function renderGrouped(list,byMonth){galContent.innerHTML='';if(!list.length){galContent.appendChild(noteEmpty());return;}
+    var cur=null,g=null;list.forEach(function(it){var lbl=byMonth?monthLabel(it.taken||it.created):dayLabel(it.taken||it.created);
+      if(lbl!==cur){cur=lbl;galContent.appendChild(el('div','dayHead',lbl));g=el('div','mgrid');galContent.appendChild(g);}g.appendChild(buildCell(it));});}
+  function noteEmpty(){var d=el('div','modNote');d.innerHTML='<b>Ingen billeder her endnu</b>Tag et foto eller en video, eller tryk + Importer.';return d;}
+  function byTakenDesc(a,b){return (b.taken||b.created)-(a.taken||a.created);}
+
+  var searchTerm='',qFilter='';
+  function isGridMod(){return ['alle','video','favoritter','kalender'].indexOf(currentMod)>=0;}
+  function updateSearchUI(){var on=isGridMod();$('searchBar').classList.toggle('on',on);galContent.classList.toggle('withSearch',on);}
+  function applyFilter(list){var t=searchTerm.trim().toLowerCase();return list.filter(function(it){
+    if(qFilter==='video'&&it.kind!=='video')return false;
+    if(qFilter==='foto'&&it.kind!=='photo')return false;
+    if(qFilter==='fav'&&!it.fav)return false;
+    if(qFilter==='geo'&&it.lat==null)return false;
+    if(!t)return true;
+    var hay=((it.album||'')+' '+dayLabel(it.taken||it.created)+' '+monthLabel(it.taken||it.created)+' '+(it.kind==='video'?'video':'foto')).toLowerCase();
+    return hay.indexOf(t)>=0;});}
+  function renderModule(){exitSelectVisual();updateSearchUI();
+    if(currentMod==='alle')renderGrouped(applyFilter(live()).sort(byTakenDesc),false);
+    else if(currentMod==='video')renderGrouped(applyFilter(live().filter(function(it){return it.kind==='video';})).sort(byTakenDesc),false);
+    else if(currentMod==='favoritter')renderGrouped(applyFilter(live().filter(function(it){return it.fav;})).sort(byTakenDesc),false);
+    else if(currentMod==='kalender')renderGrouped(applyFilter(live()).sort(byTakenDesc),true);
+    else if(currentMod==='steder')renderMap();
+    else if(currentMod==='album')renderAlbum();
+    else if(currentMod==='papirkurv')renderTrash();
+  }
+  function renderMap(){galContent.innerHTML='';var withGeo=live().filter(function(it){return it.lat!=null&&it.lng!=null;});
+    if(typeof L==='undefined'){var d=el('div','modNote');d.innerHTML=withGeo.length?('<b>Kort kunne ikke indlæses</b>'+withGeo.length+' billeder har placering. Tjek din internetforbindelse og prøv igen.'):'<b>Ingen billeder med placering</b>Billeder med GPS (taget med appen med placering slået til, eller uploadede med GPS) vises på kortet her.';galContent.appendChild(d);return;}
+    if(!withGeo.length){var d2=el('div','modNote');d2.innerHTML='<b>Ingen billeder med placering endnu</b>Slå placering til når appen spørger, så samles dine billeder på kortet. Uploadede billeder med GPS vises også her.';galContent.appendChild(d2);return;}
+    var mapDiv=el('div');mapDiv.id='mapDiv';galContent.appendChild(mapDiv);mapDiv.style.height=Math.max(galContent.clientHeight-10,320)+'px';
+    setTimeout(function(){try{var map=L.map('mapDiv');var pts=[];L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
+      withGeo.forEach(function(it){var mk=L.marker([it.lat,it.lng]).addTo(map);pts.push([it.lat,it.lng]);mk.on('click',function(){openViewer(it);});});
+      if(pts.length===1)map.setView(pts[0],14);else map.fitBounds(pts,{padding:[40,40]});setTimeout(function(){map.invalidateSize();},250);}catch(e){}},60);}
+  function distinctAlbums(){var a=[];live().forEach(function(it){if(it.album&&a.indexOf(it.album)<0)a.push(it.album);});return a.sort();}
+  function renderAlbum(){galContent.innerHTML='';
+    if(selectedAlbum){var back=el('button','backChip','‹ Alle album');back.addEventListener('click',function(){selectedAlbum=null;renderModule();});galContent.appendChild(back);
+      var list=live().filter(function(it){return it.album===selectedAlbum;}).sort(byTakenDesc);var wrap=el('div');galContent.appendChild(wrap);
+      var cur=null,g=null;wrap.appendChild(el('div','dayHead',selectedAlbum));g=el('div','mgrid');wrap.appendChild(g);list.forEach(function(it){g.appendChild(buildCell(it));});
+      if(!list.length)wrap.appendChild(el('div','modNote','Tomt album.'));return;}
+    var albums=distinctAlbums();if(!albums.length){var d=el('div','modNote');d.innerHTML='<b>Ingen album endnu</b>Åbn et billede, tryk <b>Album</b>, og skriv et navn. Så oprettes albummet automatisk.';galContent.appendChild(d);return;}
+    albums.forEach(function(name){var first=live().filter(function(it){return it.album===name;}).sort(byTakenDesc)[0];var cnt=live().filter(function(it){return it.album===name;}).length;
+      var card=el('div','albumCard');var img=document.createElement('img');if(first)img.src=urlFor(first);card.appendChild(img);var box=el('div');box.appendChild(el('div','an',name));box.appendChild(el('div','ac',cnt+(cnt===1?' billede':' billeder')));card.appendChild(box);
+      card.addEventListener('click',function(){selectedAlbum=name;renderModule();});galContent.appendChild(card);});}
+  function renderTrash(){galContent.innerHTML='';var del=items.filter(function(it){return it.deleted;}).sort(function(a,b){return (b.deletedAt||0)-(a.deletedAt||0);});
+    if(!del.length){var d=el('div','modNote');d.innerHTML='<b>Papirkurven er tom</b>Slettede billeder ligger her i 30 dage, så du kan fortryde.';galContent.appendChild(d);return;}
+    var top=el('div');top.style.padding='4px 10px';var empall=el('button','backChip','Tøm papirkurv');empall.addEventListener('click',function(){if(confirm('Slet alle '+del.length+' elementer permanent?'))Promise.all(del.map(function(it){return delItem(it.id);})).then(refreshGallery);});top.appendChild(empall);galContent.appendChild(top);
+    del.forEach(function(it){var row=el('div','trashRow');var u=urlFor(it);if(it.kind==='video'){var vd=document.createElement('video');vd.src=u;vd.muted=true;row.appendChild(vd);}else{var img=document.createElement('img');img.src=u;row.appendChild(img);}
+      var info=el('div','tinfo');var left=it.deletedAt?Math.max(0,30-Math.floor((Date.now()-it.deletedAt)/86400000)):30;info.textContent='Slettes om '+left+' dage';row.appendChild(info);
+      var restore=el('button',null,'Gendan');restore.addEventListener('click',function(){it.deleted=false;it.deletedAt=null;updateRec(it).then(refreshGallery);});row.appendChild(restore);
+      var perm=el('button','perm','Slet');perm.addEventListener('click',function(){if(confirm('Slet permanent?'))delItem(it.id).then(refreshGallery);});row.appendChild(perm);galContent.appendChild(row);});}
+
+  /* select-tilstand */
+  function toggleSel(id,cell){if(selected[id]){delete selected[id];cell.classList.remove('sel');}else{selected[id]=true;cell.classList.add('sel');}}
+  function exitSelect(){selMode=false;selected={};$('selBar').classList.remove('on');$('selectBtn').textContent='Vælg';}
+  function exitSelectVisual(){selected={};if(!selMode){$('selBar').classList.remove('on');$('selectBtn').textContent='Vælg';}}
+  $('selectBtn').addEventListener('click',function(){selMode=!selMode;selected={};$('selBar').classList.toggle('on',selMode);$('selectBtn').textContent=selMode?'Annullér':'Vælg';renderModule();});
+  function selectedItems(){return items.filter(function(it){return selected[it.id];});}
+  $('selDelete').addEventListener('click',function(){var s=selectedItems();if(!s.length)return;if(confirm('Flyt '+s.length+' til papirkurv?')){Promise.all(s.map(function(it){it.deleted=true;it.deletedAt=Date.now();return updateRec(it);})).then(function(){exitSelect();refreshGallery();});}});
+  $('selDownload').addEventListener('click',function(){selectedItems().forEach(downloadItem);});
+  $('selShare').addEventListener('click',function(){shareItems(selectedItems());});
+
+  function downloadItem(it){var u=URL.createObjectURL(it.blob);var a=document.createElement('a');a.href=u;a.download=(it.kind==='video'?'video-':'foto-')+it.id+(it.kind==='video'?'.webm':'.jpg');document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(u);},4000);}
+  function shareItems(list){if(!list.length)return;var files=list.map(function(it){return new File([it.blob],(it.kind==='video'?'video-':'foto-')+it.id+(it.kind==='video'?'.webm':'.jpg'),{type:it.blob.type||'image/jpeg'});});
+    if(navigator.canShare&&navigator.canShare({files:files})){navigator.share({files:files}).catch(function(){});}else list.forEach(downloadItem);}
+
+  /* ---------- Viser ---------- */
+  var cur=null;
+  function openViewer(it){cur=it;var u=urlFor(it);
+    if(it.kind==='video'){viewImg.classList.add('hidden');viewVid.classList.remove('hidden');viewVid.src=u;}
+    else{viewVid.classList.add('hidden');try{viewVid.pause();}catch(e){}viewImg.classList.remove('hidden');viewImg.src=u;}
+    $('vFav').innerHTML=it.fav?'♥':'♡';$('vFav').classList.toggle('fav',!!it.fav);viewMeta.textContent=fmtMeta(it);viewer.classList.add('on');}
+  function closeViewer(){viewer.classList.remove('on');try{viewVid.pause();}catch(e){}cur=null;}
+  $('vBack').addEventListener('click',closeViewer);
+  $('vTrash').addEventListener('click',function(){if(!cur)return;if(confirm('Flyt til papirkurv?')){cur.deleted=true;cur.deletedAt=Date.now();updateRec(cur).then(function(){closeViewer();refreshGallery();});}});
+  $('vFav').addEventListener('click',function(){if(!cur)return;cur.fav=!cur.fav;updateRec(cur).then(function(){$('vFav').innerHTML=cur.fav?'♥':'♡';$('vFav').classList.toggle('fav',cur.fav);refreshGallery();});});
+  $('vDownload').addEventListener('click',function(){if(cur)downloadItem(cur);});
+  $('vShare').addEventListener('click',function(){if(cur)shareItems([cur]);});
+  $('vAlbum').addEventListener('click',function(){if(!cur)return;var ex=distinctAlbums();var name=prompt('Læg i album — skriv navn:'+(ex.length?'\nEksisterende: '+ex.join(', '):''),cur.album||'');if(name&&name.trim()){cur.album=name.trim();updateRec(cur).then(function(){viewMeta.textContent=fmtMeta(cur);refreshGallery();});}});
+
+  /* ---------- Tema ---------- */
+  var SW=['#ffb454','#46d3c8','#ff5a8a','#8a7dff','#5ad17e','#f2f5f7','#ff8f3f'],themeSheet=$('themeSheet');
+  function applyTheme(c){document.documentElement.style.setProperty('--amber',c);try{localStorage.setItem('kk_theme',c);}catch(e){}}
+  (function(){try{var c=localStorage.getItem('kk_theme');if(c)applyTheme(c);}catch(e){}})();
+  themeChip.addEventListener('click',function(){var box=$('swatches');box.innerHTML='';var cu=(function(){try{return localStorage.getItem('kk_theme')||'#ffb454';}catch(e){return '#ffb454';}})();
+    SW.forEach(function(c){var b=el('button','sw'+(c===cu?' active':''));b.style.background=c;b.addEventListener('click',function(){applyTheme(c);[].slice.call(box.children).forEach(function(x){x.classList.remove('active');});b.classList.add('active');});box.appendChild(b);});themeSheet.classList.add('on');});
+  $('themeClose').addEventListener('click',function(){themeSheet.classList.remove('on');});
+  themeSheet.addEventListener('click',function(e){if(e.target===themeSheet)themeSheet.classList.remove('on');});
+
+  /* ---------- Navigation ---------- */
+  function switchTo(id){[].slice.call(document.querySelectorAll('.screen')).forEach(function(s){s.classList.toggle('active',s.id===id);});
+    [].slice.call(document.querySelectorAll('.tab')).forEach(function(t){t.classList.toggle('active',t.dataset.screen===id);});if(id==='galScreen')refreshGallery();if(id==='homeScreen')layoutRing();if(id==='profScreen'){refreshStorage();renderProfil();}}
+  [].slice.call(document.querySelectorAll('.tab')).forEach(function(t){t.addEventListener('click',function(){if(t.dataset.screen)switchTo(t.dataset.screen);});});
+  startBtn.addEventListener('click',startCam);
+  window.addEventListener('resize',function(){if(current)applyZoom(current);});
+
+  /* ---------- Søgning ---------- */
+  var SCHIPS=[['','Alle'],['foto','Foto'],['video','Video'],['fav','Favorit'],['geo','Placering']];
+  function buildSearchChips(){var box=$('searchChips');box.innerHTML='';SCHIPS.forEach(function(s){var b=el('button','schip'+(s[0]===qFilter?' active':''),s[1]);b.addEventListener('click',function(){qFilter=s[0];[].slice.call(box.children).forEach(function(c){c.classList.remove('active');});b.classList.add('active');renderModule();});box.appendChild(b);});}
+  $('searchInput').addEventListener('input',function(e){searchTerm=e.target.value;renderModule();});
+
+  /* ---------- Collage ---------- */
+  $('selCollage').addEventListener('click',function(){var s=selectedItems().filter(function(it){return it.kind==='photo';});if(s.length<2){alert('Vælg 2-4 billeder til en collage.');return;}makeCollage(s.slice(0,4));});
+  function makeCollage(list){var n=list.length,W=1200,H=1200,cv=document.createElement('canvas');cv.width=W;cv.height=H;var ctx=cv.getContext('2d');ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);
+    var rects;if(n===2)rects=[[0,0,W,H/2],[0,H/2,W,H/2]];else if(n===3)rects=[[0,0,W,H/2],[0,H/2,W/2,H/2],[W/2,H/2,W/2,H/2]];else rects=[[0,0,W/2,H/2],[W/2,0,W/2,H/2],[0,H/2,W/2,H/2],[W/2,H/2,W/2,H/2]];
+    var loaded=0,imgs=[];list.forEach(function(it,i){var im=new Image();im.onload=function(){imgs[i]=im;loaded++;if(loaded===n)draw();};im.onerror=function(){loaded++;if(loaded===n)draw();};im.src=urlFor(it);});
+    function draw(){var gap=8;rects.forEach(function(r,i){var im=imgs[i];if(!im)return;var x=r[0]+gap/2,y=r[1]+gap/2,w=r[2]-gap,h=r[3]-gap;var s=Math.max(w/im.width,h/im.height),sw=w/s,sh=h/s,sx=(im.width-sw)/2,sy=(im.height-sh)/2;ctx.drawImage(im,sx,sy,sw,sh,x,y,w,h);});
+      cv.toBlob(function(blob){saveItem(blob,'photo',{taken:Date.now()}).then(function(){exitSelect();refreshGallery();});},'image/jpeg',.92);}}
+
+  /* ---------- Rotér / beskær ---------- */
+  var editRot=0,editRatio='free';
+  $('rotateBtn').addEventListener('click',function(){editRot=(editRot+90)%360;editStage.style.transform='rotate('+editRot+'deg)';});
+  [].slice.call(document.querySelectorAll('#editTools .ratio')).forEach(function(b){b.addEventListener('click',function(){editRatio=b.dataset.r;[].slice.call(document.querySelectorAll('#editTools .ratio')).forEach(function(x){x.classList.remove('active');});b.classList.add('active');});});
+
+  /* ---------- PWA: service worker + hjemmeskærm ---------- */
+  if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}
+  var deferredPrompt=null;
+  window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();deferredPrompt=e;});
+  function doInstall(){$('themeSheet').classList.remove('on');
+    if(deferredPrompt){deferredPrompt.prompt();try{deferredPrompt.userChoice.finally(function(){deferredPrompt=null;});}catch(e){deferredPrompt=null;}}
+    else alert('Sådan får du appen på hjemmeskærmen:\n\nTryk på browser-menuen (⋮ øverst) og vælg "Føj til startskærm" / "Add to Home screen".');}
+  $('installBtn').addEventListener('click',doInstall);
+
+  /* ---------- Hjem: cirkulær menu ---------- */
+  var HPATHS={
+    kamera:'<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>',
+    zoom:'<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
+    filtre:'<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>',
+    video:'<path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/>',
+    galleri:'<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/>',
+    steder:'<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>',
+    album:'<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>',
+    favorit:'<path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/>',
+    edit:'<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+    share:'<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/>'
+  };
+  var HNODES=[
+    {key:'Kamera',sub:'Tag billeder',ic:'kamera',col:'#7f77dd',go:'cam'},
+    {key:'Galleri',sub:'Se billeder',ic:'galleri',col:'#1d9e75',go:'alle'},
+    {key:'Video',sub:'Optag',ic:'video',col:'#378add',go:'cam'},
+    {key:'Redigering',sub:'Redigér',ic:'edit',col:'#d4537e',go:'edit'},
+    {key:'Album',sub:'Dine mapper',ic:'album',col:'#ba7517',go:'album'},
+    {key:'Steder',sub:'På kortet',ic:'steder',col:'#e08a2f',go:'steder'},
+    {key:'Favorit',sub:'Ét sted',ic:'favorit',col:'#e24b4a',go:'favoritter'},
+    {key:'Deling',sub:'Del billeder',ic:'share',col:'#7f77dd',go:'share'}
+  ];
+  var nodeEls=[];
+  function buildHome(){var wrap=$('ringNodes');
+    HNODES.forEach(function(n){var d=el('div','rnode');
+      d.innerHTML='<span class="ric" style="color:'+n.col+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+HPATHS[n.ic]+'</svg></span><b>'+n.key+'</b><small>'+n.sub+'</small>';
+      d.addEventListener('click',function(){navGo(n.go);});
+      wrap.appendChild(d);nodeEls.push(d);});
+    layoutRing();}
+  function layoutRing(){var area=$('ringArea');if(!area)return;var w=area.clientWidth||window.innerWidth||380;var h=w*1.02;area.style.height=h+'px';var cx=w/2,cy=h/2,R=w*0.34;
+    nodeEls.forEach(function(e2,i){var a=i*45*Math.PI/180;var x=cx+R*Math.sin(a),y=cy-R*Math.cos(a);e2.style.left=x+'px';e2.style.top=y+'px';});}
+  function goModule(m){currentMod=m;selectedAlbum=null;buildModuleBar();switchTo('galScreen');}
+  function navGo(go){if(go==='cam')switchTo('camScreen');else if(go==='edit')editPick();else if(go==='share')goShare();else goModule(go);}
+  function editPick(){$('editInput').click();}
+  $('editInput').addEventListener('change',function(e){var f=e.target.files[0];if(f)openEditor(f);e.target.value='';});
+  function enterSelect(){selMode=true;selected={};$('selectBtn').textContent='Annullér';$('selBar').classList.add('on');renderModule();}
+  function goShare(){goModule('alle');setTimeout(enterSelect,300);}
+
+  /* Opret-menu */
+  $('createTab').addEventListener('click',function(){$('createSheet').classList.add('on');});
+  $('createSheet').addEventListener('click',function(e){if(e.target===$('createSheet'))$('createSheet').classList.remove('on');});
+  [].slice.call(document.querySelectorAll('.crow')).forEach(function(b){b.addEventListener('click',function(){
+    var a=b.dataset.act;$('createSheet').classList.remove('on');
+    if(a==='foto'||a==='doc')switchTo('camScreen');
+    else if(a==='video'){switchTo('camScreen');setTimeout(function(){},0);}
+    else if(a==='upload')fileInput.click();
+    else if(a==='album')goModule('album');
+    else if(a==='collage')goShare();
+  });});
+
+  /* Profil */
+  function refreshStorage(){
+    if(navigator.storage&&navigator.storage.estimate){navigator.storage.estimate().then(function(es){
+      var used=es.usage||0,q=es.quota||0;$('storageVal').textContent=(used/1048576).toFixed(1)+' MB brugt';
+      var pct=q?Math.min(100,used/q*100):0;$('storageBar').style.width=pct+'%';}).catch(function(){$('storageVal').textContent='Ukendt';});}
+    else $('storageVal').textContent='Ukendt';
+  }
+  $('rowTheme').addEventListener('click',function(){$('themeChip').click();});
+  $('rowInstall').addEventListener('click',doInstall);
+
+  window.addEventListener('resize',layoutRing);
+
+  /* ---------- Sky (Supabase): login + backup ---------- */
+  var SUPA_URL='https://yxexixgaxesnvkffrbgl.supabase.co';
+  var SUPA_KEY='sb_publishable_nZPtexTZ-jjanlEdQwwfJA_t28bQ5Y-';
+  var sb=null,authUser=null;
+  function initSupa(){
+    if(!window.supabase||!SUPA_URL||!SUPA_KEY){renderProfil();return;}
+    try{sb=window.supabase.createClient(SUPA_URL,SUPA_KEY);
+      sb.auth.getSession().then(function(r){authUser=(r&&r.data&&r.data.session)?r.data.session.user:null;renderProfil();});
+      sb.auth.onAuthStateChange(function(_e,s){authUser=s?s.user:null;renderProfil();});
+    }catch(e){sb=null;renderProfil();}
+  }
+  function inp(id,type,ph){return '<input id="'+id+'" type="'+type+'" placeholder="'+ph+'" style="width:100%;margin-top:8px;background:#0a0e12;border:1px solid var(--glass-line);color:var(--text);padding:11px 12px;border-radius:10px;font-size:15px">';}
+  function renderProfil(){
+    var p=$('cloudPanel');if(!p)return;
+    if(!sb){p.innerHTML='<div class="pcard soon"><b>Sky ikke tilgængelig</b><p>Kunne ikke forbinde til serveren. Tjek internettet og genindlæs.</p></div>';return;}
+    if(!authUser){
+      p.innerHTML='<div class="pcard"><div class="pcardlbl">Sky-konto</div>'+inp('authEmail','email','E-mail')+inp('authPass','password','Adgangskode (min. 6 tegn)')
+        +'<div style="display:flex;gap:8px;margin-top:10px"><button id="btnLogin" style="flex:1;background:var(--amber);color:#1a1f26;border:none;font-weight:700;padding:11px;border-radius:10px">Log ind</button>'
+        +'<button id="btnSignup" style="flex:1;background:var(--glass);border:1px solid var(--glass-line);color:var(--text);font-weight:700;padding:11px;border-radius:10px">Opret konto</button></div>'
+        +'<p id="authMsg" style="color:var(--muted);font-size:13px;margin-top:10px;min-height:16px"></p></div>';
+      $('btnLogin').addEventListener('click',function(){authAction('in');});
+      $('btnSignup').addEventListener('click',function(){authAction('up');});
+    }else{
+      p.innerHTML='<div class="pcard"><div class="pcardlbl">Sky-konto</div><div style="font-size:15px;font-weight:700;margin-top:4px">'+(authUser.email||'Logget ind')+'</div>'
+        +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button id="btnBackup" style="flex:1;min-width:130px;background:var(--amber);color:#1a1f26;border:none;font-weight:700;padding:11px;border-radius:10px">Sikkerhedskopiér nu</button>'
+        +'<button id="btnRestore" style="flex:1;min-width:110px;background:var(--glass);border:1px solid var(--glass-line);color:var(--text);font-weight:700;padding:11px;border-radius:10px">Hent fra sky</button></div>'
+        +'<div class="pbar" style="margin-top:12px"><span id="cloudBar"></span></div><p id="cloudMsg" style="color:var(--muted);font-size:13px;margin-top:8px;min-height:16px"></p>'
+        +'<button id="btnLogout" style="width:100%;margin-top:8px;background:none;border:1px solid rgba(255,90,95,.4);color:var(--red);font-weight:700;padding:10px;border-radius:10px">Log ud</button></div>';
+      $('btnBackup').addEventListener('click',doBackup);
+      $('btnRestore').addEventListener('click',doRestore);
+      $('btnLogout').addEventListener('click',function(){sb.auth.signOut();});
+    }
+  }
+  function authAction(kind){
+    var email=$('authEmail').value.trim(),pass=$('authPass').value,msg=$('authMsg');
+    if(!email||!pass){msg.textContent='Skriv e-mail og adgangskode.';return;}
+    msg.textContent='Arbejder…';
+    var pr=kind==='in'?sb.auth.signInWithPassword({email:email,password:pass}):sb.auth.signUp({email:email,password:pass});
+    pr.then(function(r){if(r.error)msg.textContent='Fejl: '+r.error.message;else if(kind==='up')msg.textContent='Konto oprettet — log nu ind.';}).catch(function(e){msg.textContent='Fejl: '+(e.message||e);});
+  }
+  function doBackup(){var bar=$('cloudBar'),msg=$('cloudMsg');msg.textContent='Forbereder…';
+    allItems().then(function(all){var n=all.length;if(!n){msg.textContent='Ingen billeder at sikkerhedskopiere.';return;}var i=0;
+      function next(){if(i>=n){msg.textContent='Færdig — '+n+' elementer i skyen.';return;}
+        var it=all[i],ext=it.kind==='video'?'webm':'jpg',path=authUser.id+'/'+it.id+'.'+ext;
+        sb.storage.from('media').upload(path,it.blob,{upsert:true,contentType:it.blob.type||'image/jpeg'})
+          .then(function(){return sb.from('media').upsert({id:it.id,user_id:authUser.id,kind:it.kind,path:path,taken:it.taken,lat:it.lat,lng:it.lng,fav:!!it.fav,album:it.album,deleted:!!it.deleted,created:it.created});})
+          .then(function(){i++;bar.style.width=Math.round(i/n*100)+'%';msg.textContent='Sikkerhedskopierer '+i+'/'+n+'…';next();})
+          .catch(function(e){msg.textContent='Fejl ved '+(i+1)+': '+(e.message||e);});}
+      next();});}
+  function doRestore(){var bar=$('cloudBar'),msg=$('cloudMsg');msg.textContent='Henter liste…';
+    sb.from('media').select('*').then(function(res){if(res.error){msg.textContent='Fejl: '+res.error.message;return;}
+      var rows=res.data||[],n=rows.length;if(!n){msg.textContent='Der er intet i skyen endnu.';return;}var i=0;
+      function next(){if(i>=n){msg.textContent='Færdig — '+n+' hentet.';bar.style.width='100%';refreshGallery();return;}
+        var r=rows[i];sb.storage.from('media').download(r.path).then(function(dl){if(dl.error||!dl.data){i++;next();return;}
+          return updateRec({id:r.id,blob:dl.data,kind:r.kind,created:r.created||Date.now(),taken:r.taken||Date.now(),lat:r.lat,lng:r.lng,fav:!!r.fav,album:r.album||null,deleted:!!r.deleted,deletedAt:null}).then(function(){i++;bar.style.width=Math.round(i/n*100)+'%';msg.textContent='Henter '+i+'/'+n+'…';next();});
+        }).catch(function(){i++;next();});}
+      next();});}
+
+  buildFilterStrip();buildModuleBar();buildSearchChips();buildHome();initSupa();
+  openDB().then(function(){return refreshGallery();}).catch(function(){err('Kunne ikke åbne lageret på denne enhed.');});
+})();
+</script>
+</body>
+</html>
