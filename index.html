@@ -11,6 +11,7 @@
 <meta name="apple-mobile-web-app-title" content="Kikkert">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
@@ -210,12 +211,85 @@
   #editTools .ratio.active{background:var(--amber);color:#1a1f26;border-color:var(--amber)}
   .setLbl{color:var(--muted);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px}
   #installBtn.setBtn{width:100%;background:var(--glass);border:1px solid var(--glass-line);color:var(--text);font-weight:700;font-size:15px;padding:13px;border-radius:100px;margin-bottom:10px}
+  #homeScreen{overflow-y:auto;background:linear-gradient(160deg,#eef1fa,#f6f0f5 55%,#fdf3ec);color:#2a2f3a}
+  #homeInner{min-height:100%;padding:calc(env(safe-area-inset-top) + 6px) 0 96px}
+  #ringArea{position:relative;width:100%}
+  #ringSvg{position:absolute;inset:0;width:100%;height:100%}
+  #ringCenter{position:absolute;top:50%;left:50%;transform:translate(-50%,-52%);text-align:center;width:64%;pointer-events:none}
+  #lens{display:flex;justify-content:center}
+  #homeTitle{font-size:24px;font-weight:800;margin-top:6px;color:#2a2f3a}
+  #homeTitle span{color:#1d9e75}
+  #homeTag{font-size:12px;color:#8a8f9a;margin-top:2px}
+  .rnode{position:absolute;transform:translate(-50%,-50%);width:82px;text-align:center;cursor:pointer}
+  .rnode:active .ric{transform:scale(.94)}
+  .ric{display:inline-flex;align-items:center;justify-content:center;width:52px;height:52px;border-radius:50%;background:#fff;box-shadow:0 6px 16px rgba(80,90,140,.18);transition:transform .12s}
+  .ric svg{width:24px;height:24px}
+  .rnode b{display:block;font-size:12px;font-weight:700;color:#2a2f3a;margin-top:5px;letter-spacing:.2px}
+  .rnode small{display:block;font-size:10px;color:#8a8f9a;line-height:1.2}
+  #homeStrip{margin:6px 16px 0;background:rgba(255,255,255,.75);border-radius:18px;padding:14px;display:grid;grid-template-columns:1fr 1fr;gap:14px 12px}
+  .stripItem{display:flex;align-items:center;gap:10px}
+  .stripItem .si{flex:0 0 auto;width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:#fff;box-shadow:0 3px 8px rgba(80,90,140,.15)}
+  .stripItem .si svg{width:18px;height:18px}
+  .stripItem b{font-size:12px;font-weight:700;color:#2a2f3a;display:block}
+  .stripItem small{font-size:10px;color:#8a8f9a}
+  #profScreen{overflow-y:auto;background:var(--bg)}
+  #profInner{padding:calc(env(safe-area-inset-top) + 18px) 16px 96px}
+  .profHead{display:flex;align-items:center;gap:14px;margin-bottom:18px}
+  .pavatar{width:56px;height:56px;border-radius:50%;background:var(--amber);color:#1a1f26;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:20px}
+  .pname{font-size:18px;font-weight:800}
+  .psub{color:var(--muted);font-size:13px}
+  .pcard{background:#111820;border:1px solid var(--glass-line);border-radius:14px;padding:14px 16px;margin-bottom:12px}
+  .pcardlbl{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:1px}
+  .pcardval{font-size:22px;font-weight:800;margin-top:4px}
+  .pbar{height:6px;border-radius:100px;background:rgba(255,255,255,.1);margin-top:10px;overflow:hidden}
+  .pbar span{display:block;height:100%;width:0;background:var(--amber);transition:width .3s}
+  .prow{width:100%;display:flex;align-items:center;justify-content:space-between;background:#111820;border:1px solid var(--glass-line);border-radius:14px;padding:15px 16px;margin-bottom:10px;color:var(--text);font-weight:600;font-size:15px}
+  .pchev{color:var(--muted);font-size:20px}
+  .pcard.soon b{display:block;color:var(--teal);font-size:13px;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px}
+  .pcard.soon p{color:var(--muted);font-size:14px;line-height:1.5;margin:0}
+  .pabout{text-align:center;color:var(--muted);font-size:12px;margin-top:16px;line-height:1.6}
+  #createSheet{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:30;display:none;align-items:flex-end}
+  #createSheet.on{display:flex}
+  #createCard{background:#111820;width:100%;border-radius:20px 20px 0 0;padding:18px 16px calc(env(safe-area-inset-bottom) + 18px)}
+  #createCard h2{font-size:18px;font-weight:800;margin:0 0 8px;padding:0 4px}
+  .crow{width:100%;display:flex;align-items:center;gap:14px;background:none;border:none;color:var(--text);padding:14px 8px;border-bottom:1px solid var(--glass-line);font-size:16px;font-weight:600;text-align:left}
+  .crow:last-child{border-bottom:none}
+  .crow svg{width:22px;height:22px;stroke:var(--amber);flex:0 0 auto}
   @media (prefers-reduced-motion:reduce){#flash.pop{animation:none}}
 </style>
 </head>
 <body>
 
-<section id="camScreen" class="screen active">
+<section id="homeScreen" class="screen active">
+  <div id="homeInner">
+    <div id="ringArea">
+      <svg id="ringSvg" viewBox="0 0 100 100" preserveAspectRatio="none" fill="none"><circle cx="50" cy="50" r="35" stroke="#cfd6ea" stroke-width="0.5"/></svg>
+      <div id="ringCenter">
+        <div id="lens">
+          <svg viewBox="0 0 100 100" width="120" height="120" fill="none">
+            <defs><linearGradient id="lensg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#46d3c8"/><stop offset="1" stop-color="#ffb454"/></linearGradient></defs>
+            <circle cx="50" cy="50" r="46" stroke="url(#lensg)" stroke-width="3"/>
+            <circle cx="50" cy="50" r="39" fill="#141922"/>
+            <circle cx="50" cy="50" r="30" fill="#1e2f40"/>
+            <circle cx="50" cy="50" r="18" fill="#0c1016"/>
+            <circle cx="41" cy="41" r="6" fill="#ffffff" opacity="0.45"/>
+          </svg>
+        </div>
+        <div id="homeTitle">My<span>Eye</span></div>
+        <div id="homeTag">Fang øjeblikket. Skab minderne.</div>
+      </div>
+      <div id="ringNodes"></div>
+    </div>
+    <div id="homeStrip">
+      <div class="stripItem"><span class="si" style="color:#ef9f27"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12c1 1 1 2 1 3h6c0-1 0-2 1-3a7 7 0 0 0-4-12z"/></svg></span><div><b>Kreativitet</b><small>Slip fantasien løs</small></div></div>
+      <div class="stripItem"><span class="si" style="color:#1d9e75"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span><div><b>Sikkerhed</b><small>Dine minder er vigtige</small></div></div>
+      <div class="stripItem"><span class="si" style="color:#378add"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10a4 4 0 0 0-7.7-1.4A4 4 0 1 0 6 16h11a3.5 3.5 0 0 0 1-6.9z"/></svg></span><div><b>Backup</b><small>Kommer snart</small></div></div>
+      <div class="stripItem"><span class="si" style="color:#7f77dd"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg></span><div><b>Deling</b><small>Del med dem du holder af</small></div></div>
+    </div>
+  </div>
+</section>
+
+<section id="camScreen" class="screen">
   <div id="stage">
     <video id="video" playsinline autoplay muted></video>
     <div id="grid3"><span class="gv1"></span><span class="gv2"></span><span class="gh1"></span><span class="gh2"></span></div>
@@ -266,9 +340,36 @@
   <div id="selBar"><button id="selCollage">Collage</button><button id="selShare">Del</button><button id="selDownload">Download</button><button class="del" id="selDelete">Slet</button></div>
 </section>
 
+<section id="profScreen" class="screen">
+  <div id="profInner">
+    <div class="profHead"><div class="pavatar">MW</div><div><div class="pname">Mohammed Warrad</div><div class="psub">MyEye</div></div></div>
+    <div class="pcard"><div class="pcardlbl">Lager brugt</div><div id="storageVal" class="pcardval">–</div><div class="pbar"><span id="storageBar"></span></div></div>
+    <button class="prow" id="rowTheme"><span>Udseende / tema</span><span class="pchev">›</span></button>
+    <button class="prow" id="rowInstall"><span>Føj til hjemmeskærm</span><span class="pchev">›</span></button>
+    <div id="cloudPanel"></div>
+    <div class="pabout">MyEye · Udviklet af Mohammed Warrad<br>© 2026 MW Groupe</div>
+  </div>
+</section>
+
+<div id="createSheet"><div id="createCard">
+  <h2>Opret</h2>
+  <button class="crow" data-act="foto"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>Tag billede</button>
+  <button class="crow" data-act="video"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>Optag video</button>
+  <button class="crow" data-act="upload"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>Upload billeder</button>
+  <button class="crow" data-act="album"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Opret album</button>
+  <button class="crow" data-act="doc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>Scan dokument</button>
+  <button class="crow" data-act="collage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="8"/><rect x="13" y="3" width="8" height="8"/><rect x="3" y="13" width="8" height="8"/><rect x="13" y="13" width="8" height="8"/></svg>Opret collage</button>
+  <button class="crow" data-act="luk" style="justify-content:center;color:var(--muted)">Luk</button>
+</div></div>
+
+<input id="editInput" type="file" accept="image/*" class="hidden">
+
 <nav id="tabs">
-  <button class="tab active" data-screen="camScreen"><svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>Kamera</button>
+  <button class="tab active" data-screen="homeScreen"><svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>Hjem</button>
+  <button class="tab" data-screen="camScreen"><svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>Kamera</button>
   <button class="tab" data-screen="galScreen"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>Galleri</button>
+  <button class="tab" id="createTab"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>Opret</button>
+  <button class="tab" data-screen="profScreen"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>Profil</button>
 </nav>
 
 <div id="viewer">
@@ -570,7 +671,7 @@
   /* select-tilstand */
   function toggleSel(id,cell){if(selected[id]){delete selected[id];cell.classList.remove('sel');}else{selected[id]=true;cell.classList.add('sel');}}
   function exitSelect(){selMode=false;selected={};$('selBar').classList.remove('on');$('selectBtn').textContent='Vælg';}
-  function exitSelectVisual(){selected={};$('selBar').classList.remove('on');if(!selMode)$('selectBtn').textContent='Vælg';}
+  function exitSelectVisual(){selected={};if(!selMode){$('selBar').classList.remove('on');$('selectBtn').textContent='Vælg';}}
   $('selectBtn').addEventListener('click',function(){selMode=!selMode;selected={};$('selBar').classList.toggle('on',selMode);$('selectBtn').textContent=selMode?'Annullér':'Vælg';renderModule();});
   function selectedItems(){return items.filter(function(it){return selected[it.id];});}
   $('selDelete').addEventListener('click',function(){var s=selectedItems();if(!s.length)return;if(confirm('Flyt '+s.length+' til papirkurv?')){Promise.all(s.map(function(it){it.deleted=true;it.deletedAt=Date.now();return updateRec(it);})).then(function(){exitSelect();refreshGallery();});}});
@@ -606,8 +707,8 @@
 
   /* ---------- Navigation ---------- */
   function switchTo(id){[].slice.call(document.querySelectorAll('.screen')).forEach(function(s){s.classList.toggle('active',s.id===id);});
-    [].slice.call(document.querySelectorAll('.tab')).forEach(function(t){t.classList.toggle('active',t.dataset.screen===id);});if(id==='galScreen')refreshGallery();}
-  [].slice.call(document.querySelectorAll('.tab')).forEach(function(t){t.addEventListener('click',function(){switchTo(t.dataset.screen);});});
+    [].slice.call(document.querySelectorAll('.tab')).forEach(function(t){t.classList.toggle('active',t.dataset.screen===id);});if(id==='galScreen')refreshGallery();if(id==='homeScreen')layoutRing();if(id==='profScreen'){refreshStorage();renderProfil();}}
+  [].slice.call(document.querySelectorAll('.tab')).forEach(function(t){t.addEventListener('click',function(){if(t.dataset.screen)switchTo(t.dataset.screen);});});
   startBtn.addEventListener('click',startCam);
   window.addEventListener('resize',function(){if(current)applyZoom(current);});
 
@@ -633,11 +734,133 @@
   if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}
   var deferredPrompt=null;
   window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();deferredPrompt=e;});
-  $('installBtn').addEventListener('click',function(){$('themeSheet').classList.remove('on');
+  function doInstall(){$('themeSheet').classList.remove('on');
     if(deferredPrompt){deferredPrompt.prompt();try{deferredPrompt.userChoice.finally(function(){deferredPrompt=null;});}catch(e){deferredPrompt=null;}}
-    else alert('Sådan får du appen på hjemmeskærmen:\n\nTryk på browser-menuen (⋮ øverst) og vælg "Føj til startskærm" / "Add to Home screen".');});
+    else alert('Sådan får du appen på hjemmeskærmen:\n\nTryk på browser-menuen (⋮ øverst) og vælg "Føj til startskærm" / "Add to Home screen".');}
+  $('installBtn').addEventListener('click',doInstall);
 
-  buildFilterStrip();buildModuleBar();buildSearchChips();
+  /* ---------- Hjem: cirkulær menu ---------- */
+  var HPATHS={
+    kamera:'<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>',
+    zoom:'<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
+    filtre:'<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>',
+    video:'<path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/>',
+    galleri:'<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/>',
+    steder:'<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>',
+    album:'<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>',
+    favorit:'<path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/>',
+    edit:'<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+    share:'<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/>'
+  };
+  var HNODES=[
+    {key:'Kamera',sub:'Tag billeder',ic:'kamera',col:'#7f77dd',go:'cam'},
+    {key:'Galleri',sub:'Se billeder',ic:'galleri',col:'#1d9e75',go:'alle'},
+    {key:'Video',sub:'Optag',ic:'video',col:'#378add',go:'cam'},
+    {key:'Redigering',sub:'Redigér',ic:'edit',col:'#d4537e',go:'edit'},
+    {key:'Album',sub:'Dine mapper',ic:'album',col:'#ba7517',go:'album'},
+    {key:'Steder',sub:'På kortet',ic:'steder',col:'#e08a2f',go:'steder'},
+    {key:'Favorit',sub:'Ét sted',ic:'favorit',col:'#e24b4a',go:'favoritter'},
+    {key:'Deling',sub:'Del billeder',ic:'share',col:'#7f77dd',go:'share'}
+  ];
+  var nodeEls=[];
+  function buildHome(){var wrap=$('ringNodes');
+    HNODES.forEach(function(n){var d=el('div','rnode');
+      d.innerHTML='<span class="ric" style="color:'+n.col+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+HPATHS[n.ic]+'</svg></span><b>'+n.key+'</b><small>'+n.sub+'</small>';
+      d.addEventListener('click',function(){navGo(n.go);});
+      wrap.appendChild(d);nodeEls.push(d);});
+    layoutRing();}
+  function layoutRing(){var area=$('ringArea');if(!area)return;var w=area.clientWidth||window.innerWidth||380;var h=w*1.02;area.style.height=h+'px';var cx=w/2,cy=h/2,R=w*0.34;
+    nodeEls.forEach(function(e2,i){var a=i*45*Math.PI/180;var x=cx+R*Math.sin(a),y=cy-R*Math.cos(a);e2.style.left=x+'px';e2.style.top=y+'px';});}
+  function goModule(m){currentMod=m;selectedAlbum=null;buildModuleBar();switchTo('galScreen');}
+  function navGo(go){if(go==='cam')switchTo('camScreen');else if(go==='edit')editPick();else if(go==='share')goShare();else goModule(go);}
+  function editPick(){$('editInput').click();}
+  $('editInput').addEventListener('change',function(e){var f=e.target.files[0];if(f)openEditor(f);e.target.value='';});
+  function enterSelect(){selMode=true;selected={};$('selectBtn').textContent='Annullér';$('selBar').classList.add('on');renderModule();}
+  function goShare(){goModule('alle');setTimeout(enterSelect,300);}
+
+  /* Opret-menu */
+  $('createTab').addEventListener('click',function(){$('createSheet').classList.add('on');});
+  $('createSheet').addEventListener('click',function(e){if(e.target===$('createSheet'))$('createSheet').classList.remove('on');});
+  [].slice.call(document.querySelectorAll('.crow')).forEach(function(b){b.addEventListener('click',function(){
+    var a=b.dataset.act;$('createSheet').classList.remove('on');
+    if(a==='foto'||a==='doc')switchTo('camScreen');
+    else if(a==='video'){switchTo('camScreen');setTimeout(function(){},0);}
+    else if(a==='upload')fileInput.click();
+    else if(a==='album')goModule('album');
+    else if(a==='collage')goShare();
+  });});
+
+  /* Profil */
+  function refreshStorage(){
+    if(navigator.storage&&navigator.storage.estimate){navigator.storage.estimate().then(function(es){
+      var used=es.usage||0,q=es.quota||0;$('storageVal').textContent=(used/1048576).toFixed(1)+' MB brugt';
+      var pct=q?Math.min(100,used/q*100):0;$('storageBar').style.width=pct+'%';}).catch(function(){$('storageVal').textContent='Ukendt';});}
+    else $('storageVal').textContent='Ukendt';
+  }
+  $('rowTheme').addEventListener('click',function(){$('themeChip').click();});
+  $('rowInstall').addEventListener('click',doInstall);
+
+  window.addEventListener('resize',layoutRing);
+
+  /* ---------- Sky (Supabase): login + backup ---------- */
+  var SUPA_URL='https://yxexixgaxesnvkffrbgl.supabase.co';
+  var SUPA_KEY='sb_publishable_nZPtexTZ-jjanlEdQwwfJA_t28bQ5Y-';
+  var sb=null,authUser=null;
+  function initSupa(){
+    if(!window.supabase||!SUPA_URL||!SUPA_KEY){renderProfil();return;}
+    try{sb=window.supabase.createClient(SUPA_URL,SUPA_KEY);
+      sb.auth.getSession().then(function(r){authUser=(r&&r.data&&r.data.session)?r.data.session.user:null;renderProfil();});
+      sb.auth.onAuthStateChange(function(_e,s){authUser=s?s.user:null;renderProfil();});
+    }catch(e){sb=null;renderProfil();}
+  }
+  function inp(id,type,ph){return '<input id="'+id+'" type="'+type+'" placeholder="'+ph+'" style="width:100%;margin-top:8px;background:#0a0e12;border:1px solid var(--glass-line);color:var(--text);padding:11px 12px;border-radius:10px;font-size:15px">';}
+  function renderProfil(){
+    var p=$('cloudPanel');if(!p)return;
+    if(!sb){p.innerHTML='<div class="pcard soon"><b>Sky ikke tilgængelig</b><p>Kunne ikke forbinde til serveren. Tjek internettet og genindlæs.</p></div>';return;}
+    if(!authUser){
+      p.innerHTML='<div class="pcard"><div class="pcardlbl">Sky-konto</div>'+inp('authEmail','email','E-mail')+inp('authPass','password','Adgangskode (min. 6 tegn)')
+        +'<div style="display:flex;gap:8px;margin-top:10px"><button id="btnLogin" style="flex:1;background:var(--amber);color:#1a1f26;border:none;font-weight:700;padding:11px;border-radius:10px">Log ind</button>'
+        +'<button id="btnSignup" style="flex:1;background:var(--glass);border:1px solid var(--glass-line);color:var(--text);font-weight:700;padding:11px;border-radius:10px">Opret konto</button></div>'
+        +'<p id="authMsg" style="color:var(--muted);font-size:13px;margin-top:10px;min-height:16px"></p></div>';
+      $('btnLogin').addEventListener('click',function(){authAction('in');});
+      $('btnSignup').addEventListener('click',function(){authAction('up');});
+    }else{
+      p.innerHTML='<div class="pcard"><div class="pcardlbl">Sky-konto</div><div style="font-size:15px;font-weight:700;margin-top:4px">'+(authUser.email||'Logget ind')+'</div>'
+        +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button id="btnBackup" style="flex:1;min-width:130px;background:var(--amber);color:#1a1f26;border:none;font-weight:700;padding:11px;border-radius:10px">Sikkerhedskopiér nu</button>'
+        +'<button id="btnRestore" style="flex:1;min-width:110px;background:var(--glass);border:1px solid var(--glass-line);color:var(--text);font-weight:700;padding:11px;border-radius:10px">Hent fra sky</button></div>'
+        +'<div class="pbar" style="margin-top:12px"><span id="cloudBar"></span></div><p id="cloudMsg" style="color:var(--muted);font-size:13px;margin-top:8px;min-height:16px"></p>'
+        +'<button id="btnLogout" style="width:100%;margin-top:8px;background:none;border:1px solid rgba(255,90,95,.4);color:var(--red);font-weight:700;padding:10px;border-radius:10px">Log ud</button></div>';
+      $('btnBackup').addEventListener('click',doBackup);
+      $('btnRestore').addEventListener('click',doRestore);
+      $('btnLogout').addEventListener('click',function(){sb.auth.signOut();});
+    }
+  }
+  function authAction(kind){
+    var email=$('authEmail').value.trim(),pass=$('authPass').value,msg=$('authMsg');
+    if(!email||!pass){msg.textContent='Skriv e-mail og adgangskode.';return;}
+    msg.textContent='Arbejder…';
+    var pr=kind==='in'?sb.auth.signInWithPassword({email:email,password:pass}):sb.auth.signUp({email:email,password:pass});
+    pr.then(function(r){if(r.error)msg.textContent='Fejl: '+r.error.message;else if(kind==='up')msg.textContent='Konto oprettet — log nu ind.';}).catch(function(e){msg.textContent='Fejl: '+(e.message||e);});
+  }
+  function doBackup(){var bar=$('cloudBar'),msg=$('cloudMsg');msg.textContent='Forbereder…';
+    allItems().then(function(all){var n=all.length;if(!n){msg.textContent='Ingen billeder at sikkerhedskopiere.';return;}var i=0;
+      function next(){if(i>=n){msg.textContent='Færdig — '+n+' elementer i skyen.';return;}
+        var it=all[i],ext=it.kind==='video'?'webm':'jpg',path=authUser.id+'/'+it.id+'.'+ext;
+        sb.storage.from('media').upload(path,it.blob,{upsert:true,contentType:it.blob.type||'image/jpeg'})
+          .then(function(){return sb.from('media').upsert({id:it.id,user_id:authUser.id,kind:it.kind,path:path,taken:it.taken,lat:it.lat,lng:it.lng,fav:!!it.fav,album:it.album,deleted:!!it.deleted,created:it.created});})
+          .then(function(){i++;bar.style.width=Math.round(i/n*100)+'%';msg.textContent='Sikkerhedskopierer '+i+'/'+n+'…';next();})
+          .catch(function(e){msg.textContent='Fejl ved '+(i+1)+': '+(e.message||e);});}
+      next();});}
+  function doRestore(){var bar=$('cloudBar'),msg=$('cloudMsg');msg.textContent='Henter liste…';
+    sb.from('media').select('*').then(function(res){if(res.error){msg.textContent='Fejl: '+res.error.message;return;}
+      var rows=res.data||[],n=rows.length;if(!n){msg.textContent='Der er intet i skyen endnu.';return;}var i=0;
+      function next(){if(i>=n){msg.textContent='Færdig — '+n+' hentet.';bar.style.width='100%';refreshGallery();return;}
+        var r=rows[i];sb.storage.from('media').download(r.path).then(function(dl){if(dl.error||!dl.data){i++;next();return;}
+          return updateRec({id:r.id,blob:dl.data,kind:r.kind,created:r.created||Date.now(),taken:r.taken||Date.now(),lat:r.lat,lng:r.lng,fav:!!r.fav,album:r.album||null,deleted:!!r.deleted,deletedAt:null}).then(function(){i++;bar.style.width=Math.round(i/n*100)+'%';msg.textContent='Henter '+i+'/'+n+'…';next();});
+        }).catch(function(){i++;next();});}
+      next();});}
+
+  buildFilterStrip();buildModuleBar();buildSearchChips();buildHome();initSupa();
   openDB().then(function(){return refreshGallery();}).catch(function(){err('Kunne ikke åbne lageret på denne enhed.');});
 })();
 </script>
