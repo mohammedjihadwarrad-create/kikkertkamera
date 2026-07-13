@@ -9,6 +9,8 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Kikkert">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
@@ -627,15 +629,8 @@
   $('rotateBtn').addEventListener('click',function(){editRot=(editRot+90)%360;editStage.style.transform='rotate('+editRot+'deg)';});
   [].slice.call(document.querySelectorAll('#editTools .ratio')).forEach(function(b){b.addEventListener('click',function(){editRatio=b.dataset.r;[].slice.call(document.querySelectorAll('#editTools .ratio')).forEach(function(x){x.classList.remove('active');});b.classList.add('active');});});
 
-  /* ---------- PWA: hjemmeskærm ---------- */
-  function makeIcon(sz){var c=document.createElement('canvas');c.width=c.height=sz;var x=c.getContext('2d');x.fillStyle='#0a0e12';x.fillRect(0,0,sz,sz);
-    x.strokeStyle='#ffb454';x.lineWidth=sz*0.05;x.fillStyle='#111820';x.beginPath();x.arc(sz*0.5,sz*0.54,sz*0.27,0,Math.PI*2);x.fill();x.stroke();
-    x.fillStyle='#ffb454';x.beginPath();x.arc(sz*0.5,sz*0.54,sz*0.1,0,Math.PI*2);x.fill();x.fillStyle='#46d3c8';x.fillRect(sz*0.3,sz*0.22,sz*0.4,sz*0.06);return c.toDataURL('image/png');}
-  (function(){try{var i192=makeIcon(192),i512=makeIcon(512);
-    var man={name:'Kikkert Kamera',short_name:'Kikkert',start_url:'.',scope:'.',display:'standalone',background_color:'#0a0e12',theme_color:'#0a0e12',icons:[{src:i192,sizes:'192x192',type:'image/png'},{src:i512,sizes:'512x512',type:'image/png'}]};
-    var url=URL.createObjectURL(new Blob([JSON.stringify(man)],{type:'application/manifest+json'}));
-    var l=document.createElement('link');l.rel='manifest';l.href=url;document.head.appendChild(l);
-    var ai=document.createElement('link');ai.rel='apple-touch-icon';ai.href=i192;document.head.appendChild(ai);}catch(e){}})();
+  /* ---------- PWA: service worker + hjemmeskærm ---------- */
+  if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}
   var deferredPrompt=null;
   window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();deferredPrompt=e;});
   $('installBtn').addEventListener('click',function(){$('themeSheet').classList.remove('on');
