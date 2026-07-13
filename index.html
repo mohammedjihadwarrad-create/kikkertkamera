@@ -4,6 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Kikkert Kamera</title>
+<meta name="theme-color" content="#0a0e12">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Kikkert">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
@@ -188,6 +193,21 @@
   .sw{width:44px;height:44px;border-radius:50%;border:3px solid transparent}
   .sw.active{border-color:#fff}
   #themeClose{width:100%;background:var(--amber);color:#1a1f26;border:none;font-weight:800;font-size:16px;padding:13px;border-radius:100px}
+  #searchBar{position:absolute;top:calc(env(safe-area-inset-top) + 102px);left:0;right:0;z-index:2;display:none;flex-direction:column;gap:8px;padding:0 12px 8px;background:var(--bg)}
+  #searchBar.on{display:flex}
+  #searchInput{width:100%;background:var(--glass);border:1px solid var(--glass-line);color:var(--text);font-size:15px;padding:10px 14px;border-radius:100px;outline:none}
+  #searchInput::placeholder{color:var(--muted)}
+  #searchChips{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none}
+  #searchChips::-webkit-scrollbar{display:none}
+  .schip{flex:0 0 auto;background:var(--glass);border:1px solid var(--glass-line);color:var(--text);font-weight:700;font-size:12px;padding:6px 12px;border-radius:100px}
+  .schip.active{background:var(--amber);color:#1a1f26;border-color:var(--amber)}
+  #galContent.withSearch{top:calc(env(safe-area-inset-top) + 192px)}
+  #editTools{display:flex;gap:8px;overflow-x:auto;padding:6px 12px;scrollbar-width:none}
+  #editTools::-webkit-scrollbar{display:none}
+  #editTools button{flex:0 0 auto;background:var(--glass);border:1px solid var(--glass-line);color:var(--text);font-weight:700;font-size:13px;padding:8px 12px;border-radius:100px}
+  #editTools .ratio.active{background:var(--amber);color:#1a1f26;border-color:var(--amber)}
+  .setLbl{color:var(--muted);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px}
+  #installBtn.setBtn{width:100%;background:var(--glass);border:1px solid var(--glass-line);color:var(--text);font-weight:700;font-size:15px;padding:13px;border-radius:100px;margin-bottom:10px}
   @media (prefers-reduced-motion:reduce){#flash.pop{animation:none}}
 </style>
 </head>
@@ -239,8 +259,9 @@
     </div>
   </div>
   <div id="moduleBar"></div>
+  <div id="searchBar"><input id="searchInput" type="search" placeholder="Søg i album, dato…"><div id="searchChips"></div></div>
   <div id="galContent"></div>
-  <div id="selBar"><button id="selShare">Del</button><button id="selDownload">Download</button><button class="del" id="selDelete">Slet</button></div>
+  <div id="selBar"><button id="selCollage">Collage</button><button id="selShare">Del</button><button id="selDownload">Download</button><button class="del" id="selDelete">Slet</button></div>
 </section>
 
 <nav id="tabs">
@@ -261,12 +282,13 @@
 <div id="editor">
   <div id="editTop"><button id="editCancel">Kassér</button><button id="editSave">Gem</button></div>
   <div id="editArea"><div id="editStage"><img id="editImg" alt="Rediger"></div></div>
+  <div id="editTools"><button id="rotateBtn">Rotér</button><button class="ratio active" data-r="free">Fri</button><button class="ratio" data-r="1">1:1</button><button class="ratio" data-r="1.3333">4:3</button><button class="ratio" data-r="1.7778">16:9</button></div>
   <div id="editFilters"></div>
   <div id="emojiRow"></div>
   <div id="editFoot"><button id="addText">Tekst</button><button id="addEmoji">Emoji</button><button id="delOv">Slet valgt</button></div>
 </div>
 
-<div id="themeSheet"><div id="themeCard"><h2>Vælg farve</h2><div id="swatches"></div><button id="themeClose">Færdig</button></div></div>
+<div id="themeSheet"><div id="themeCard"><h2>Indstillinger</h2><p class="setLbl">Farve</p><div id="swatches"></div><button id="installBtn" class="setBtn">＋ Føj til hjemmeskærm</button><button id="themeClose">Færdig</button></div></div>
 <input id="fileInput" type="file" accept="image/*,video/*" multiple class="hidden">
 
 <script>
@@ -425,7 +447,9 @@
   var EMOJIS=['😀','😎','😍','🔥','⭐','❤️','👍','🎉','🐶','🐱','🌈','💯','📸','✨','😂','👀'];
   function openEditor(blob){if(editBlobUrl)URL.revokeObjectURL(editBlobUrl);editBlobUrl=URL.createObjectURL(blob);editImg.src=editBlobUrl;
     editFilter='none';editImg.style.filter='';pickedOv=null;delOv.classList.remove('on');
-    [].slice.call(editStage.querySelectorAll('.ov')).forEach(function(o){o.remove();});buildEditFilters();buildEmojiRow();emojiRow.classList.remove('on');editor.classList.add('on');}
+    [].slice.call(editStage.querySelectorAll('.ov')).forEach(function(o){o.remove();});buildEditFilters();buildEmojiRow();emojiRow.classList.remove('on');
+    editRot=0;editRatio='free';editStage.style.transform='';[].slice.call(document.querySelectorAll('#editTools .ratio')).forEach(function(x){x.classList.toggle('active',x.dataset.r==='free');});
+    editor.classList.add('on');}
   function closeEditor(){editor.classList.remove('on');}
   function buildEditFilters(){editFilters.innerHTML='';FILTERS.forEach(function(fl){var b=el('button','fchip'+(fl.f===editFilter?' active':''),fl.n);
     b.addEventListener('click',function(){editFilter=fl.f;editImg.style.filter=fl.f==='none'?'':fl.f;[].slice.call(editFilters.children).forEach(function(c){c.classList.remove('active');});b.classList.add('active');});editFilters.appendChild(b);});}
@@ -447,7 +471,10 @@
     [].slice.call(editStage.querySelectorAll('.ov')).forEach(function(o){var x=parseFloat(o.dataset.x)*natW,y=parseFloat(o.dataset.y)*natH;
       if(o.classList.contains('txt')){var fs=28*scale;ctx.font='800 '+fs+'px -apple-system,Roboto,sans-serif';ctx.fillStyle='#fff';ctx.textAlign='center';ctx.textBaseline='middle';ctx.shadowColor='rgba(0,0,0,.6)';ctx.shadowBlur=8*scale;ctx.shadowOffsetY=2*scale;ctx.fillText(o.textContent,x,y);ctx.shadowColor='transparent';}
       else{var es=56*scale;ctx.font=es+'px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(o.textContent,x,y);}});
-    cv.toBlob(function(blob){saveItem(blob,'photo',{taken:Date.now(),lat:lastPos&&lastPos.lat,lng:lastPos&&lastPos.lng}).then(function(){closeEditor();switchTo('galScreen');});},'image/jpeg',.95);});
+    var out=cv;
+    if(editRot%360!==0){var k=editRot%360,rc=document.createElement('canvas');if(k===90||k===270){rc.width=cv.height;rc.height=cv.width;}else{rc.width=cv.width;rc.height=cv.height;}var rx=rc.getContext('2d');rx.translate(rc.width/2,rc.height/2);rx.rotate(k*Math.PI/180);rx.drawImage(cv,-cv.width/2,-cv.height/2);out=rc;}
+    if(editRatio!=='free'){var ar=parseFloat(editRatio),cw=out.width,ch=out.height,tw,th;if(cw/ch>ar){th=ch;tw=Math.round(ch*ar);}else{tw=cw;th=Math.round(cw/ar);}var cc=document.createElement('canvas');cc.width=tw;cc.height=th;cc.getContext('2d').drawImage(out,(cw-tw)/2,(ch-th)/2,tw,th,0,0,tw,th);out=cc;}
+    out.toBlob(function(blob){saveItem(blob,'photo',{taken:Date.now(),lat:lastPos&&lastPos.lat,lng:lastPos&&lastPos.lng}).then(function(){closeEditor();switchTo('galScreen');});},'image/jpeg',.95);});
 
   /* ---------- Import ---------- */
   importBtn.addEventListener('click',function(){fileInput.click();});
@@ -493,14 +520,25 @@
   function noteEmpty(){var d=el('div','modNote');d.innerHTML='<b>Ingen billeder her endnu</b>Tag et foto eller en video, eller tryk + Importer.';return d;}
   function byTakenDesc(a,b){return (b.taken||b.created)-(a.taken||a.created);}
 
-  function renderModule(){exitSelectVisual();
-    if(currentMod==='alle'){renderGrouped(live().slice().sort(byTakenDesc),false);}
-    else if(currentMod==='video'){renderGrouped(live().filter(function(it){return it.kind==='video';}).sort(byTakenDesc),false);}
-    else if(currentMod==='favoritter'){renderGrouped(live().filter(function(it){return it.fav;}).sort(byTakenDesc),false);}
-    else if(currentMod==='kalender'){renderGrouped(live().slice().sort(byTakenDesc),true);}
-    else if(currentMod==='steder'){renderMap();}
-    else if(currentMod==='album'){renderAlbum();}
-    else if(currentMod==='papirkurv'){renderTrash();}
+  var searchTerm='',qFilter='';
+  function isGridMod(){return ['alle','video','favoritter','kalender'].indexOf(currentMod)>=0;}
+  function updateSearchUI(){var on=isGridMod();$('searchBar').classList.toggle('on',on);galContent.classList.toggle('withSearch',on);}
+  function applyFilter(list){var t=searchTerm.trim().toLowerCase();return list.filter(function(it){
+    if(qFilter==='video'&&it.kind!=='video')return false;
+    if(qFilter==='foto'&&it.kind!=='photo')return false;
+    if(qFilter==='fav'&&!it.fav)return false;
+    if(qFilter==='geo'&&it.lat==null)return false;
+    if(!t)return true;
+    var hay=((it.album||'')+' '+dayLabel(it.taken||it.created)+' '+monthLabel(it.taken||it.created)+' '+(it.kind==='video'?'video':'foto')).toLowerCase();
+    return hay.indexOf(t)>=0;});}
+  function renderModule(){exitSelectVisual();updateSearchUI();
+    if(currentMod==='alle')renderGrouped(applyFilter(live()).sort(byTakenDesc),false);
+    else if(currentMod==='video')renderGrouped(applyFilter(live().filter(function(it){return it.kind==='video';})).sort(byTakenDesc),false);
+    else if(currentMod==='favoritter')renderGrouped(applyFilter(live().filter(function(it){return it.fav;})).sort(byTakenDesc),false);
+    else if(currentMod==='kalender')renderGrouped(applyFilter(live()).sort(byTakenDesc),true);
+    else if(currentMod==='steder')renderMap();
+    else if(currentMod==='album')renderAlbum();
+    else if(currentMod==='papirkurv')renderTrash();
   }
   function renderMap(){galContent.innerHTML='';var withGeo=live().filter(function(it){return it.lat!=null&&it.lng!=null;});
     if(typeof L==='undefined'){var d=el('div','modNote');d.innerHTML=withGeo.length?('<b>Kort kunne ikke indlæses</b>'+withGeo.length+' billeder har placering. Tjek din internetforbindelse og prøv igen.'):'<b>Ingen billeder med placering</b>Billeder med GPS (taget med appen med placering slået til, eller uploadede med GPS) vises på kortet her.';galContent.appendChild(d);return;}
@@ -571,7 +609,40 @@
   startBtn.addEventListener('click',startCam);
   window.addEventListener('resize',function(){if(current)applyZoom(current);});
 
-  buildFilterStrip();buildModuleBar();
+  /* ---------- Søgning ---------- */
+  var SCHIPS=[['','Alle'],['foto','Foto'],['video','Video'],['fav','Favorit'],['geo','Placering']];
+  function buildSearchChips(){var box=$('searchChips');box.innerHTML='';SCHIPS.forEach(function(s){var b=el('button','schip'+(s[0]===qFilter?' active':''),s[1]);b.addEventListener('click',function(){qFilter=s[0];[].slice.call(box.children).forEach(function(c){c.classList.remove('active');});b.classList.add('active');renderModule();});box.appendChild(b);});}
+  $('searchInput').addEventListener('input',function(e){searchTerm=e.target.value;renderModule();});
+
+  /* ---------- Collage ---------- */
+  $('selCollage').addEventListener('click',function(){var s=selectedItems().filter(function(it){return it.kind==='photo';});if(s.length<2){alert('Vælg 2-4 billeder til en collage.');return;}makeCollage(s.slice(0,4));});
+  function makeCollage(list){var n=list.length,W=1200,H=1200,cv=document.createElement('canvas');cv.width=W;cv.height=H;var ctx=cv.getContext('2d');ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);
+    var rects;if(n===2)rects=[[0,0,W,H/2],[0,H/2,W,H/2]];else if(n===3)rects=[[0,0,W,H/2],[0,H/2,W/2,H/2],[W/2,H/2,W/2,H/2]];else rects=[[0,0,W/2,H/2],[W/2,0,W/2,H/2],[0,H/2,W/2,H/2],[W/2,H/2,W/2,H/2]];
+    var loaded=0,imgs=[];list.forEach(function(it,i){var im=new Image();im.onload=function(){imgs[i]=im;loaded++;if(loaded===n)draw();};im.onerror=function(){loaded++;if(loaded===n)draw();};im.src=urlFor(it);});
+    function draw(){var gap=8;rects.forEach(function(r,i){var im=imgs[i];if(!im)return;var x=r[0]+gap/2,y=r[1]+gap/2,w=r[2]-gap,h=r[3]-gap;var s=Math.max(w/im.width,h/im.height),sw=w/s,sh=h/s,sx=(im.width-sw)/2,sy=(im.height-sh)/2;ctx.drawImage(im,sx,sy,sw,sh,x,y,w,h);});
+      cv.toBlob(function(blob){saveItem(blob,'photo',{taken:Date.now()}).then(function(){exitSelect();refreshGallery();});},'image/jpeg',.92);}}
+
+  /* ---------- Rotér / beskær ---------- */
+  var editRot=0,editRatio='free';
+  $('rotateBtn').addEventListener('click',function(){editRot=(editRot+90)%360;editStage.style.transform='rotate('+editRot+'deg)';});
+  [].slice.call(document.querySelectorAll('#editTools .ratio')).forEach(function(b){b.addEventListener('click',function(){editRatio=b.dataset.r;[].slice.call(document.querySelectorAll('#editTools .ratio')).forEach(function(x){x.classList.remove('active');});b.classList.add('active');});});
+
+  /* ---------- PWA: hjemmeskærm ---------- */
+  function makeIcon(sz){var c=document.createElement('canvas');c.width=c.height=sz;var x=c.getContext('2d');x.fillStyle='#0a0e12';x.fillRect(0,0,sz,sz);
+    x.strokeStyle='#ffb454';x.lineWidth=sz*0.05;x.fillStyle='#111820';x.beginPath();x.arc(sz*0.5,sz*0.54,sz*0.27,0,Math.PI*2);x.fill();x.stroke();
+    x.fillStyle='#ffb454';x.beginPath();x.arc(sz*0.5,sz*0.54,sz*0.1,0,Math.PI*2);x.fill();x.fillStyle='#46d3c8';x.fillRect(sz*0.3,sz*0.22,sz*0.4,sz*0.06);return c.toDataURL('image/png');}
+  (function(){try{var i192=makeIcon(192),i512=makeIcon(512);
+    var man={name:'Kikkert Kamera',short_name:'Kikkert',start_url:'.',scope:'.',display:'standalone',background_color:'#0a0e12',theme_color:'#0a0e12',icons:[{src:i192,sizes:'192x192',type:'image/png'},{src:i512,sizes:'512x512',type:'image/png'}]};
+    var url=URL.createObjectURL(new Blob([JSON.stringify(man)],{type:'application/manifest+json'}));
+    var l=document.createElement('link');l.rel='manifest';l.href=url;document.head.appendChild(l);
+    var ai=document.createElement('link');ai.rel='apple-touch-icon';ai.href=i192;document.head.appendChild(ai);}catch(e){}})();
+  var deferredPrompt=null;
+  window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();deferredPrompt=e;});
+  $('installBtn').addEventListener('click',function(){$('themeSheet').classList.remove('on');
+    if(deferredPrompt){deferredPrompt.prompt();try{deferredPrompt.userChoice.finally(function(){deferredPrompt=null;});}catch(e){deferredPrompt=null;}}
+    else alert('Sådan får du appen på hjemmeskærmen:\n\nTryk på browser-menuen (⋮ øverst) og vælg "Føj til startskærm" / "Add to Home screen".');});
+
+  buildFilterStrip();buildModuleBar();buildSearchChips();
   openDB().then(function(){return refreshGallery();}).catch(function(){err('Kunne ikke åbne lageret på denne enhed.');});
 })();
 </script>
